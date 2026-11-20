@@ -60,7 +60,7 @@ async function api(method,path,body,auth){
   return data;
 }
 async function run(p,okMsg){try{const r=await p;if(okMsg)toast(okMsg);return r}catch(e){toast(e.message);throw e}}
-async function loadPublic(){try{const r=await api('GET','/api/products');S.pub=r.products;S.loaded.pub=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
+async function loadPublic(){try{const r=await api('GET','/api/products');S.pub=r.products;S.loaded.pub=true;S.netErr=navigator.onLine?'':'Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.'}catch(e){S.netErr=e.message}render()}
 async function loadMine(){const toks=ls.get('orders',[]);if(!toks.length){S.mine=[];return}try{const r=await api('POST','/api/orders/lookup',{tokens:toks});S.mine=r.orders;render()}catch(e){}}
 async function loadAdmin(){if(!S.token)return;try{const r=await api('GET','/api/admin/data',null,true);S.products=r.products;S.customers=r.customers;S.orders=r.orders;S.stockin=r.stockin;S.loaded.admin=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
 async function loadQueue(){try{const r=await api('GET','/api/orders/queue');S.queue=r.orders;S.loaded.queue=true}catch(e){}render()}
@@ -128,7 +128,9 @@ function notifyNew(){
   if(S.ns.sound)beep();
   try{if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){}
   if(S.ns.push&&'Notification' in window&&Notification.permission==='granted'&&document.hidden){
-    fresh.forEach(o=>{try{const n=new Notification('Pesanan baru · '+o.customerName,{body:itemsText(o)+' · '+rp(o.total)+(o.slot?' · '+o.slot:''),icon:'logo.png',tag:o.id});n.onclick=()=>{window.focus();go('pesanan');n.close()}}catch(e){}});
+    fresh.forEach(o=>{const title='Pesanan baru · '+o.customerName,opts={body:itemsText(o)+' · '+rp(o.total)+(o.slot?' · '+o.slot:''),icon:'logo.png',badge:'favicon.png',tag:o.id,data:{url:'/#pesanan'}};
+      if(navigator.serviceWorker&&navigator.serviceWorker.controller){navigator.serviceWorker.ready.then(r=>r.showNotification(title,opts)).catch(()=>{})}
+      else{try{const n=new Notification(title,opts);n.onclick=()=>{window.focus();go('pesanan');n.close()}}catch(e){}}});
   }
 }
 function notifHtml(){
@@ -148,6 +150,22 @@ function salam(){const h=new Date().getHours();return h<11?'Selamat pagi':h<15?'
 function loading(){return isShopView()?!(S.view==='pesananku'?S.loaded.queue:S.loaded.pub):!S.loaded.admin}
 function prodTile(p,big){if(p.img)return '<img class="thumb" src="'+esc(p.img)+'" alt=""'+(big?' style="width:54px;height:54px;border-radius:16px"':'')+'>';const [c,i]=CAT_STYLE[p.cat]||CAT_STYLE.Lainnya;return '<span class="tile t-'+c+'"'+(big?' style="width:54px;height:54px;border-radius:16px"':'')+'>'+ic(i,big?26:20)+'</span>'}
 
+/* ---------- PWA: pasang aplikasi & offline ---------- */
+let deferredPrompt=null;
+const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;render()});
+window.addEventListener('appinstalled',()=>{deferredPrompt=null;toast('KAmart sudah terpasang di HP kamu');render()});
+window.addEventListener('offline',()=>{S.netErr='Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.';render()});
+window.addEventListener('online',()=>{S.netErr='';tick()});
+if(!navigator.onLine)S.netErr='Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.';
+if('serviceWorker' in navigator)window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{})});
+function installCard(){if(isStandalone()||!(deferredPrompt||isIOS()))return '';
+  return '<div class="card stack" style="gap:10px;padding:16px"><span style="display:flex;align-items:center;gap:12px"><img src="icons/icon-192.png" alt="" width="46" height="46" style="border-radius:14px;flex:none"><span><b>Pasang aplikasi KAmart</b><br><small style="color:var(--muted)">Buka langsung dari layar utama HP, layar penuh seperti aplikasi.</small></span></span>'+
+  (deferredPrompt?'<button class="btn" data-act="install">Pasang sekarang</button>':'<small style="color:var(--muted)">Di iPhone: buka di Safari, ketuk tombol <b>Bagikan</b>, lalu pilih <b>Tambahkan ke Layar Utama</b>.</small>')+'</div>'}
+function installBanner(){if(!deferredPrompt||isStandalone()||ls.get('installHide',0))return '';
+  return '<div class="banner b-lav" style="display:flex;align-items:center;gap:10px;padding:10px 12px"><img src="icons/icon-192.png" alt="" width="38" height="38" style="border-radius:11px;flex:none"><span style="flex:1;min-width:0;font-size:12px;line-height:1.35"><b>Pasang aplikasi KAmart</b><br>Pesan lebih cepat dari layar utama.</span><button class="btn3" data-act="install">Pasang</button><button class="btn3" data-act="installhide" aria-label="Tutup" style="padding:0 12px">×</button></div>'}
+async function doInstall(){if(!deferredPrompt)return;deferredPrompt.prompt();try{await deferredPrompt.userChoice}catch(e){}deferredPrompt=null;render()}
 function shopHead(title,sub,right,logo){return '<header class="sh-head"><div style="min-width:0;display:flex;align-items:center;gap:10px">'+(logo?'<img src="logo.png" alt="KAmart" width="46" height="46" style="border-radius:50%;flex:none;box-shadow:0 8px 18px rgba(91,71,176,.25)">':'')+'<div style="min-width:0"><h1>'+title+'</h1><p>'+sub+'</p></div></div>'+(right||'')+'</header>'}
 function myOrders(){return S.mine.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt))}
 function shopNav(){const n=sum(cartLines(S.cart,S.pub),l=>l.qty),a=myOrders().filter(o=>o.stage<3).length;
@@ -167,7 +185,7 @@ function vToko(){
   const cats=['Semua',...new Set(list.map(p=>p.cat||'Lainnya'))];
   const q=S.q.trim().toLowerCase();
   const shown=list.filter(p=>(S.cat==='Semua'||p.cat===S.cat)&&(!q||String(p.name).toLowerCase().includes(q)));
-  return head+'<div class="stack" style="gap:14px">'+
+  return head+'<div class="stack" style="gap:14px">'+installBanner()+
   '<div class="search">'+ic('search',18)+'<label for="q" class="sr">Cari produk</label><input class="in" id="q" type="search" data-bind="q" data-live="1" placeholder="Cari Pop Mie, kopi…" value="'+esc(S.q)+'"></div>'+
   '<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup 30 menit sebelum istirahat.</p></div>'+cupHtml()+'</section>'+
   '<div class="chips" role="group" aria-label="Kategori">'+cats.map(c=>'<button class="sg'+(S.cat===c?' on':'')+'" data-cat="'+esc(c)+'" aria-pressed="'+(S.cat===c)+'">'+esc(c)+'</button>').join('')+'</div>'+
@@ -220,7 +238,7 @@ function vAkun(){
    '<label class="f">Bagian / line<input class="in" id="ak-line" data-bind="co.line" value="'+esc(S.co.line)+'" placeholder="Contoh: Painting L1"></label>'+
    '<small style="color:var(--muted)">'+(c?'Kamu bisa memakai Bayar pas gajian.':'Bayar pas gajian hanya untuk pelanggan terdaftar. Minta penjual mendaftarkan namamu.')+'</small></div>'+
   '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><div class="stat b-lav" style="padding:14px"><span class="lb">Total pesanan</span><span class="vl num" style="font-size:20px">'+mine.length+'</span></div><div class="stat b-gold" style="padding:14px"><span class="lb">Kasbon</span><span class="vl num" style="font-size:20px">'+rp(kb)+'</span></div></div>'+
-  '<div class="card stack" style="gap:4px;font-size:13px;padding:16px"><b>Info ambil pesanan</b><span style="color:var(--muted)">Ambil di parkiran motor / pos sesuai jam yang dipilih. Order tutup 30 menit sebelum istirahat.</span></div>'+
+  installCard()+'<div class="card stack" style="gap:4px;font-size:13px;padding:16px"><b>Info ambil pesanan</b><span style="color:var(--muted)">Ambil di parkiran motor / pos sesuai jam yang dipilih. Order tutup 30 menit sebelum istirahat.</span></div>'+
   '<button class="btn2" data-go="dashboard" style="justify-content:center;height:46px">Masuk admin</button></div>';
 }
 function itemsText(o){return (o.items||[]).map(i=>i.qty+'× '+i.name).join(', ')}
@@ -507,6 +525,8 @@ document.addEventListener('click',async e=>{
   if(d.lunas){await run(api('POST','/api/admin/kasbon/settle',{name:d.lunas},true),'Kasbon '+d.lunas+' lunas').catch(()=>{});loadAdmin();return}
   if(d.copy){const os=unpaidKasbon().filter(o=>o.customerName===d.copy);copyText('Halo '+d.copy+', tagihan KAmart kamu '+rp(sum(os,o=>+o.total||0))+' ('+os.length+' transaksi). Mohon dibayar saat gajian ya. Terima kasih!');return}
   const act=d.act;if(!act)return;
+  if(act==='install'){doInstall();return}
+  if(act==='installhide'){ls.set('installHide',1);render();return}
   if(act==='dlplaced'&&S.placed){autoReceipt();return}
   if(act==='closeplaced'){S.placed=null;go('pesananku');render();return}
   if(act==='nsound'){S.ns.sound=!S.ns.sound;ls.set('ns',S.ns);if(S.ns.sound)beep();render();return}

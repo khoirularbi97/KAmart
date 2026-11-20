@@ -102,6 +102,15 @@ curl -I https://api-kamart.scurebot.site/api/health              # harus HTTP/2 
    - Tombol **Masuk admin** di tab Akun = halaman login admin (username & password dari `backend/.env`).
 5. Isi `CORS_ORIGIN` di `backend/.env` dengan domain Vercel lalu `docker compose up -d` (opsional jika selalu lewat rewrite).
 
+## Aplikasi HP (PWA)
+
+KAmart bisa dipasang di layar utama HP:
+- **Android (Chrome):** buka situs KAmart, lalu ketuk **Pasang** pada banner di halaman toko, atau tombol **Pasang sekarang** di tab Akun.
+- **iPhone (Safari):** ketuk **Bagikan**, lalu **Tambahkan ke Layar Utama**.
+
+Katalog tetap bisa dilihat saat offline (data terakhir). Memesan dan halaman admin tetap butuh internet.
+Setiap rilis, naikkan `VERSION` di `frontend/sw.js` (misalnya `kamart-v2`) supaya HP pengguna mengambil file terbaru.
+
 ## Menjalankan di komputer sendiri
 
 Butuh Node.js 20+.

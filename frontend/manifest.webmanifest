@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "KAmart",
+  "short_name": "KAmart",
+  "description": "Pesan jajan dan kebutuhan harian, ambil saat istirahat.",
+  "lang": "id",
+  "start_url": "/#toko",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF1EF",
+  "theme_color": "#6E5AC4",
+  "categories": ["shopping", "food"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Belanja", "url": "/#toko", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Antrian pesanan", "url": "/#pesananku", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Admin", "url": "/#dashboard", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
