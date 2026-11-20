@@ -1,0 +1,22 @@
+{
+  "name": "kamart-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API toko kelontong KAmart (Express + PostgreSQL/Neon)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --env-file=.env src/server.js",
+    "migrate": "node src/migrate.js",
+    "seed": "node src/seed.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "express": "4.21.2",
+    "jsonwebtoken": "9.0.2",
+    "pg": "8.13.1"
+  }
+}
