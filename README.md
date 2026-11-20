@@ -5,7 +5,7 @@ Toko kelontong online untuk lingkungan PT: pembeli pesan dari HP lalu ambil saat
 | Bagian | Teknologi | Deploy ke |
 |---|---|---|
 | `frontend/` | HTML + CSS + JavaScript (tanpa build) | **Vercel** |
-| `backend/` | Node.js + Express + JWT | **Render** |
+| `backend/` | Node.js + Express + JWT | **VPS** (Docker atau PM2) |
 | Database | PostgreSQL | **Neon** |
 
 ```
@@ -14,10 +14,11 @@ kamart/
 ├── backend/
 │   ├── src/           # server.js (API), db.js, migrate.js, seed.js
 │   └── sql/           # schema.sql, seed.sql (data awal dari KAmart_Pencatatan)
-└── render.yaml        # blueprint Render
+├── docker-compose.yml # API di VPS (nginx-proxy + SSL otomatis)
+└── render.yaml        # opsional: blueprint Render
 ```
 
-Alur data: browser → `https://domain-vercel/api/...` → (rewrite Vercel) → API di Render → database Neon.
+Alur data: browser → `https://domain-vercel/api/...` → (rewrite Vercel) → `https://api-kamart.scurebot.site` (VPS) → database Neon.
 Karena lewat rewrite, frontend dan API terlihat satu domain, jadi tidak ada masalah CORS.
 
 ---
@@ -42,30 +43,58 @@ Karena lewat rewrite, frontend dan API terlihat satu domain, jadi tidak ada masa
    `postgresql://USER:PASSWORD@ep-xxxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
 3. Tidak perlu membuat tabel manual. API akan membuat tabel dan mengisi data awal otomatis saat pertama kali jalan.
 
-## 3. Backend API di Render
+## 3. Backend API di VPS
 
-**Cara cepat (Blueprint):**
-1. Di <https://dashboard.render.com> pilih **New → Blueprint**, hubungkan repo `kamart`.
-2. Render membaca `render.yaml`. Isi variabel yang diminta:
-   - `DATABASE_URL` = connection string dari Neon
-   - `ADMIN_PASSWORD` = password admin (minimal 8 karakter)
-   - `CORS_ORIGIN` = domain Vercel nanti, misalnya `https://kamart.vercel.app` (boleh dikosongkan dulu)
-   - `JWT_SECRET` dibuat otomatis, `ADMIN_USERNAME` default `admin`
-3. Tunggu deploy selesai, lalu buka `https://NAMA-SERVICE.onrender.com/api/health`. Hasilnya harus `{"ok":true}`.
+Contoh memakai subdomain `api-kamart.scurebot.site`. Ganti jika memakai nama lain (ubah juga `frontend/vercel.json`).
 
-**Cara manual (Web Service):** Root Directory `backend`, Build Command `npm install --omit=dev`, Start Command `npm start`, lalu isi environment variable yang sama.
+### a. Arahkan subdomain ke VPS
+Di panel DNS domain (Rumahweb), tambahkan **A record**: nama `api-kamart`, nilai = IP VPS. Tunggu beberapa menit sampai aktif (`ping api-kamart.scurebot.site` menunjukkan IP VPS).
 
-> Paket gratis Render "tidur" setelah 15 menit tanpa akses. Permintaan pertama setelah tidur bisa butuh sekitar 1 menit.
+### b. Ambil kode dan isi rahasia
+```bash
+cd ~
+git clone https://github.com/khoirularbi97/KAmart.git kamart
+cd kamart
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+Isi `DATABASE_URL` (dari Neon), `JWT_SECRET` (buat dengan `openssl rand -hex 32`), `ADMIN_USERNAME`, `ADMIN_PASSWORD` (minimal 8 karakter), dan `CORS_ORIGIN` (domain Vercel, boleh kosong dulu).
+
+### c. Jalankan dengan Docker (disarankan, karena port 80/443 dipegang nginx-proxy)
+```bash
+docker network ls                      # cari nama network milik nginx-proxy
+docker compose up -d --build           # jika nama network-nya bukan "nginx-proxy":
+                                       # PROXY_NETWORK=nama_network docker compose up -d --build
+docker logs -f kamart-api              # harus muncul "KAmart API berjalan di port 3000"
+```
+nginx-proxy membaca `VIRTUAL_HOST`, dan acme-companion membuat sertifikat SSL untuk `LETSENCRYPT_HOST` secara otomatis (1–2 menit).
+Cek: buka `https://api-kamart.scurebot.site/api/health`, hasilnya harus `{"ok":true}`.
+
+**Update setelah ada perubahan kode:**
+```bash
+cd ~/kamart && git pull && docker compose up -d --build
+```
+
+### Alternatif: PM2 (tanpa Docker)
+```bash
+cd ~/kamart/backend
+npm install --omit=dev
+pm2 start ecosystem.config.js && pm2 save
+```
+API berjalan di port 3005. Hubungkan subdomain ke port itu dengan cara yang sama seperti API lain di VPS kamu.
+
+### Opsional: Render
+`render.yaml` tetap tersedia jika suatu saat ingin memakai Render (Root Directory `backend`, Start Command `npm start`).
 
 ## 4. Frontend di Vercel
 
-1. Buka `frontend/vercel.json`, ganti `GANTI-DENGAN-NAMA-SERVICE.onrender.com` dengan alamat Render kamu. Commit & push.
+1. `frontend/vercel.json` sudah mengarah ke `https://api-kamart.scurebot.site`. Jika memakai subdomain lain, ubah dulu lalu commit & push.
 2. Di <https://vercel.com/new>, import repo `kamart`.
 3. Atur **Root Directory** = `frontend`, **Framework Preset** = `Other`, kosongkan Build Command dan Output Directory.
 4. Deploy. Buka domain Vercel-nya:
    - Halaman utama = toko untuk pembeli (tanpa login).
-   - Tombol **Masuk admin** di tab Akun = halaman login admin (username & password dari Render).
-5. Isi `CORS_ORIGIN` di Render dengan domain Vercel (opsional jika selalu lewat rewrite).
+   - Tombol **Masuk admin** di tab Akun = halaman login admin (username & password dari `backend/.env`).
+5. Isi `CORS_ORIGIN` di `backend/.env` dengan domain Vercel lalu `docker compose up -d` (opsional jika selalu lewat rewrite).
 
 ## Menjalankan di komputer sendiri
 
@@ -102,7 +131,7 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 
 - Harga dan stok selalu dihitung di server, bukan dari browser, jadi pembeli tidak bisa mengubah harga.
 - Login admin dibatasi 5 kali gagal per 5 menit per alamat IP.
-- Jangan pernah commit file `.env`. Ganti `ADMIN_PASSWORD` di Render kapan saja; token lama tetap berlaku sampai kedaluwarsa, jadi ganti juga `JWT_SECRET` untuk memaksa semua perangkat login ulang.
+- Jangan pernah commit file `.env`. Ganti `ADMIN_PASSWORD` di `backend/.env` kapan saja (lalu restart API); token lama tetap berlaku sampai kedaluwarsa, jadi ganti juga `JWT_SECRET` untuk memaksa semua perangkat login ulang.
 - Rokok tidak tampil di toko online (wajib verifikasi umur) dan hanya bisa dijual lewat Kasir.
 
 ## Data awal

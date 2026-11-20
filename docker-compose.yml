@@ -1,0 +1,31 @@
+# API KAmart di VPS, di belakang nginx-proxy + acme-companion (SSL otomatis).
+# Jalankan dari folder repo:  docker compose up -d --build
+# Isi rahasia (DATABASE_URL, JWT_SECRET, ADMIN_PASSWORD, ...) di backend/.env
+
+services:
+  kamart-api:
+    build: ./backend
+    container_name: kamart-api
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      PORT: "3000"
+      VIRTUAL_HOST: ${KAMART_DOMAIN:-api-kamart.scurebot.site}
+      VIRTUAL_PORT: "3000"
+      LETSENCRYPT_HOST: ${KAMART_DOMAIN:-api-kamart.scurebot.site}
+    expose:
+      - "3000"
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+    # Nama network milik container nginx-proxy. Cek dengan: docker network ls
+    name: ${PROXY_NETWORK:-nginx-proxy}

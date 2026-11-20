@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://GANTI-DENGAN-NAMA-SERVICE.onrender.com/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://api-kamart.scurebot.site/api/:path*" }
   ],
   "headers": [
     {
