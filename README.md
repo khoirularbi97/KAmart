@@ -81,7 +81,13 @@ cd ~/kamart/backend
 npm install --omit=dev
 pm2 start ecosystem.config.js && pm2 save
 ```
-API berjalan di port 3005. Hubungkan subdomain ke port itu dengan cara yang sama seperti API lain di VPS kamu.
+API berjalan di port 3005. Sambungkan subdomain lewat container jembatan (socat) di network nginx-proxy, lalu izinkan container mengakses port 3005 di firewall:
+```bash
+cd ~/apps/kamart
+PROXY_NETWORK=smart-parking_app-network docker compose -f deploy/pm2-bridge.compose.yml up -d
+sudo ufw allow from 172.16.0.0/12 to any port 3005 proto tcp   # tanpa ini hasilnya 504 Gateway Timeout
+curl -I https://api-kamart.scurebot.site/api/health              # harus HTTP/2 200
+```
 
 ### Opsional: Render
 `render.yaml` tetap tersedia jika suatu saat ingin memakai Render (Root Directory `backend`, Start Command `npm start`).
