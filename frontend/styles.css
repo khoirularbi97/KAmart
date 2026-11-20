@@ -132,6 +132,31 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .ktile.on{border-color:var(--primary)}
 .ktile small{font-size:11px;font-weight:700;color:var(--muted)}
 .ktile .n{min-width:24px;height:24px;border-radius:999px;background:var(--primary);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+/* Mode tampilan admin: Otomatis / HP / Desktop */
+.tbtns{flex-wrap:wrap}
+.lay{background:#fff;border-radius:999px;padding:4px;gap:2px;box-shadow:var(--shadow)}
+.lay .sg{height:36px;border:0;background:transparent;display:inline-flex;align-items:center;gap:6px;padding:0 12px;color:#54496A}
+.lay .sg.on{background:var(--primary);color:#fff}
+@media (max-width:520px){.lay .sg span{display:none}.lay .sg{padding:0 10px}}
+.force-mobile .side{display:none}
+.force-mobile .app{display:block;max-width:480px}
+.force-mobile .main{border-radius:24px;padding:16px 16px 120px;min-height:auto}
+.force-mobile .mbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(135deg,var(--side-a),var(--side-b));color:#fff;border-radius:22px;padding:12px 14px;margin-bottom:14px}
+.force-mobile .mbar b{font-size:18px}
+.force-mobile .illu,.force-mobile .plant{display:none}
+.force-mobile .top h1{font-size:22px}
+.force-mobile .shop{grid-template-columns:1fr}
+.force-mobile .sticky{position:static}
+.force-mobile .lay .sg span{display:none}
+.force-mobile .pill{max-width:min(448px,calc(100% - 32px))}
+.force-desktop .app{display:flex;min-width:1248px}
+.force-desktop .side{display:flex}
+.force-desktop .mbar{display:none}
+.force-desktop .main{border-radius:28px;padding:22px 26px 120px;min-height:calc(100vh - 32px)}
+.force-desktop .illu,.force-desktop .plant{display:block}
+.force-desktop .top h1{font-size:26px}
+.force-desktop .shop{grid-template-columns:minmax(0,1fr) 340px}
+.force-desktop .sticky{position:sticky}
 /* Notifikasi pesanan masuk (admin) */
 .notif{position:fixed;top:calc(16px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));z-index:55;display:flex;flex-direction:column;gap:10px;width:min(350px,calc(100% - 32px))}
 .ncard{background:#fff;border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 18px 40px rgba(43,33,64,.25);border:2px solid var(--primary-soft)}
