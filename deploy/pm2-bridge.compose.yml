@@ -1,0 +1,27 @@
+# Jembatan untuk API KAmart yang dijalankan PM2 di host (port 3005).
+# nginx-proxy hanya bisa meneruskan ke container, jadi container kecil ini
+# meneruskan api-kamart.scurebot.site -> host:3005, dan acme-companion
+# otomatis membuat SSL untuk domainnya.
+#   docker compose -f deploy/pm2-bridge.compose.yml up -d
+
+services:
+  kamart-bridge:
+    image: alpine/socat:latest
+    container_name: kamart-bridge
+    restart: unless-stopped
+    command: tcp-listen:3005,fork,reuseaddr tcp-connect:host.docker.internal:3005
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      VIRTUAL_HOST: ${KAMART_DOMAIN:-api-kamart.scurebot.site}
+      VIRTUAL_PORT: "3005"
+      LETSENCRYPT_HOST: ${KAMART_DOMAIN:-api-kamart.scurebot.site}
+    expose:
+      - "3005"
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-nginx-proxy}
