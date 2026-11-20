@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
 const db = require('./db');
 const { migrate, seedIfEmpty } = require('./migrate');
+const storage = require('./storage');
 
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -187,7 +188,7 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
 const app = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '3mb' }));
 
 const origins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: origins.length ? origins : true }));
@@ -195,7 +196,16 @@ app.use(cors({ origin: origins.length ? origins : true }));
 app.get('/', (req, res) => res.json({ name: 'KAmart API', ok: true }));
 app.get('/api/health', ah(async (req, res) => {
   await db.query('SELECT 1');
-  res.json({ ok: true });
+  res.json({ ok: true, foto: storage.ENABLED ? 'neon-bucket:' + storage.BUCKET : 'database' });
+}));
+
+/* Foto produk cadangan (jika bucket Neon belum diatur) */
+app.get('/api/images/:kode', ah(async (req, res) => {
+  const { rows } = await db.query('SELECT mime, data, updated_at FROM product_images WHERE kode = $1', [req.params.kode]);
+  if (!rows[0]) return res.status(404).json({ error: 'Foto tidak ditemukan.' });
+  res.set('Content-Type', rows[0].mime);
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  res.send(rows[0].data);
 }));
 
 /* Publik: katalog toko */
@@ -323,12 +333,24 @@ admin.put('/products/:kode', ah(async (req, res) => {
   const cat = CATS.includes(b.cat) ? b.cat : 'Lainnya';
   const modal = int(b.modal); const jual = int(b.jual); const min = int(b.min || 0);
   if (![modal, jual, min].every((n) => Number.isInteger(n) && n >= 0)) throw bad('Harga dan stok minimum harus angka 0 atau lebih.');
-  const img = String(b.img || '');
-  if (img && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 300000)) throw bad('Foto tidak valid atau terlalu besar.');
   const online = cat === 'Rokok' ? false : !!b.online;
-  if (b.isNew) {
-    const ex = await db.query('SELECT 1 FROM products WHERE kode = $1', [kode]);
-    if (ex.rowCount) throw new HttpError(409, 'Kode ' + kode + ' sudah dipakai.');
+  const cur = await db.query('SELECT img FROM products WHERE kode = $1', [kode]);
+  if (b.isNew && cur.rowCount) throw new HttpError(409, 'Kode ' + kode + ' sudah dipakai.');
+  const oldImg = cur.rowCount ? cur.rows[0].img : '';
+  // Foto baru dikirim sebagai data URL -> disimpan ke bucket Neon (atau database). '' = hapus foto.
+  const incoming = typeof b.img === 'string' ? b.img : oldImg;
+  let img = oldImg;
+  if (incoming.startsWith('data:')) {
+    try {
+      img = await storage.saveImage(db, kode, incoming, oldImg);
+    } catch (e) {
+      if (e.status === 400) throw e;
+      console.error('Upload foto gagal:', e.message);
+      throw new HttpError(502, 'Foto gagal diunggah ke penyimpanan. Coba lagi.');
+    }
+  } else if (incoming === '') {
+    if (oldImg) await storage.removeImage(db, kode, oldImg);
+    img = '';
   }
   await db.query(
     `INSERT INTO products (kode, name, cat, unit, modal, jual, min_stock, online, img, updated_at)
@@ -445,6 +467,16 @@ app.use((err, req, res, next) => {
   try {
     await migrate(db);
     if (AUTO_SEED && (await seedIfEmpty(db))) console.log('Data awal KAmart dimasukkan.');
+    console.log('Penyimpanan foto: ' + (storage.ENABLED ? 'Neon Object Storage (bucket ' + storage.BUCKET + ')' : 'database (bucket belum diatur)'));
+    // Pindahkan foto lama (data URL di kolom img) ke penyimpanan baru.
+    const legacy = await db.query("SELECT kode, img FROM products WHERE img LIKE 'data:%'");
+    for (const r of legacy.rows) {
+      try {
+        const url = await storage.saveImage(db, r.kode, r.img, '');
+        await db.query('UPDATE products SET img = $2 WHERE kode = $1', [r.kode, url]);
+        console.log('Foto ' + r.kode + ' dipindahkan.');
+      } catch (e) { console.error('Pindah foto ' + r.kode + ' gagal:', e.message); }
+    }
     app.listen(PORT, () => console.log('KAmart API berjalan di port ' + PORT));
   } catch (e) {
     console.error('Gagal menyiapkan database:', e.message);

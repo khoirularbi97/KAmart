@@ -65,3 +65,11 @@ CREATE TABLE IF NOT EXISTS push_subs (
   auth        TEXT NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Cadangan penyimpanan foto produk jika bucket Neon Object Storage belum diatur.
+CREATE TABLE IF NOT EXISTS product_images (
+  kode        TEXT PRIMARY KEY,
+  mime        TEXT NOT NULL,
+  data        BYTEA NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);

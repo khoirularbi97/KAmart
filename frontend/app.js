@@ -600,10 +600,10 @@ async function shrink(file){
   const url=URL.createObjectURL(file);
   try{
     const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});
-    const M=400,s=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+    const M=800,s=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
     const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
     const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
-    return c.toDataURL('image/jpeg',0.8);
+    return c.toDataURL('image/jpeg',0.82);
   }finally{URL.revokeObjectURL(url)}
 }
 document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='p-img'||!t.files||!t.files[0]||!S.pf)return;
@@ -634,7 +634,7 @@ async function saveProduct(){
   if(!kode||!String(f.name).trim()){toast('Kode dan nama wajib diisi');return}
   if(!f._edit&&S.products.some(p=>p.kode===kode)){toast('Kode '+kode+' sudah dipakai');return}
   const body={isNew:!f._edit,name:String(f.name).trim(),cat:f.cat,unit:String(f.unit||'').trim(),modal:+f.modal||0,jual:+f.jual||0,min:+f.min||0,online:f.cat==='Rokok'?false:!!f.online,img:f.img||''};
-  if(body.img.length>300000){toast('Foto terlalu besar, coba foto lain');return}
+  if(body.img.length>1000000){toast('Foto terlalu besar, coba foto lain');return}
   try{await run(api('PUT','/api/admin/products/'+encodeURIComponent(kode),body,true),'Produk tersimpan');S.pf=null;await loadAdmin()}catch(e){}
 }
 async function saveStock(){

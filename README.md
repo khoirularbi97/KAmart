@@ -131,6 +131,27 @@ Notifikasi pesanan baru tetap masuk walau aplikasi KAmart ditutup.
 
 Catatan: di iPhone (iOS 16.4+), KAmart harus dipasang ke Layar Utama dulu dan dibuka dari ikonnya. Jangan mengganti kunci VAPID setelah dipakai; kalau terganti, aktifkan ulang notifikasi di setiap HP admin.
 
+## Foto produk di Neon Object Storage (bucket)
+
+Tanpa pengaturan apa pun, foto disimpan di tabel `product_images` (database). Agar foto disimpan di bucket Neon:
+
+1. **Buat bucket:** Console Neon → project KAmart → pilih branch → tab **Object storage** → **New bucket**.
+   Nama: `kamart-produk`, akses: **public_read** (supaya foto bisa tampil di toko). Butuh peran Admin project.
+2. **Buat credential** dengan scope `storage:read` dan `storage:write`. Simpan *secret*-nya, hanya ditampilkan sekali.
+3. **Isi `backend/.env`:**
+   ```
+   AWS_ENDPOINT_URL_S3=https://<branch-id>.storage.c-<N>.<region>.aws.neon.tech
+   AWS_REGION=ap-southeast-1
+   AWS_ACCESS_KEY_ID=<token_id credential>
+   AWS_SECRET_ACCESS_KEY=<s3_secret_access_key>
+   NEON_BUCKET=kamart-produk
+   ```
+4. `npm install --omit=dev && pm2 restart kamart-api`. Di log harus muncul
+   `Penyimpanan foto: Neon Object Storage (bucket kamart-produk)`, dan `/api/health` menampilkan `"foto":"neon-bucket:kamart-produk"`.
+
+Foto yang sudah ada otomatis dipindahkan saat API dijalankan ulang. Foto lama terhapus dari bucket saat diganti atau dihapus.
+Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `NEON_BUCKET_PUBLIC_URL`.
+
 ## Menjalankan di komputer sendiri
 
 Butuh Node.js 20+.
