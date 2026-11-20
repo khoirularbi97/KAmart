@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const webpush = require('web-push');
 const db = require('./db');
 const { migrate, seedIfEmpty } = require('./migrate');
 
@@ -19,6 +20,13 @@ if (ADMIN_PASSWORD.length < 8) {
   console.error('ADMIN_PASSWORD minimal 8 karakter.');
   process.exit(1);
 }
+
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@scurebot.site';
+const PUSH_ON = !!(VAPID_PUBLIC && VAPID_PRIVATE);
+if (PUSH_ON) webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+else console.log('Web Push nonaktif: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY belum diisi.');
 
 const STAGES_MAX = 3;
 const PAYS = ['QRIS', 'Tunai', 'Kasbon'];
@@ -73,6 +81,27 @@ const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.
 async function findCustomer(client, name) {
   const { rows } = await client.query('SELECT * FROM customers WHERE lower(name) = lower($1)', [name]);
   return rows[0] || null;
+}
+
+/* Kirim notifikasi ke semua HP admin yang berlangganan. Langganan kedaluwarsa dihapus. */
+async function pushAdmins(payload) {
+  if (!PUSH_ON) return;
+  const { rows } = await db.query('SELECT endpoint, p256dh, auth FROM push_subs');
+  await Promise.all(rows.map(async (s) => {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify(payload),
+        { TTL: 3600, urgency: 'high' },
+      );
+    } catch (e) {
+      if (e.statusCode === 404 || e.statusCode === 410) {
+        await db.query('DELETE FROM push_subs WHERE endpoint = $1', [s.endpoint]).catch(() => {});
+      } else {
+        console.error('Push gagal:', e.statusCode || e.message);
+      }
+    }
+  }));
 }
 
 function orderCode() {
@@ -193,7 +222,17 @@ app.post('/api/orders', ah(async (req, res) => {
     pay: b.pay, slot, note: str(b.note, 140), allowHidden: false,
   });
   res.status(201).json({ order: mapPublicOrder(row), token });
+  const items = (row.items || []).map((i) => i.qty + '× ' + i.name).join(', ');
+  pushAdmins({
+    title: 'Pesanan baru · ' + row.customer_name,
+    body: items + ' · Rp' + Number(row.total).toLocaleString('id-ID') + (row.slot ? ' · ' + row.slot : ''),
+    tag: row.id,
+    url: '/#pesanan',
+  }).catch((e) => console.error('Push gagal:', e.message));
 }));
+
+/* Publik: kunci VAPID untuk berlangganan notifikasi */
+app.get('/api/push/key', (req, res) => res.json({ publicKey: PUSH_ON ? VAPID_PUBLIC : null }));
 
 /* Publik: status pesanan milik HP ini (pakai token yang disimpan di HP) */
 app.post('/api/orders/lookup', ah(async (req, res) => {
@@ -362,6 +401,32 @@ admin.post('/kasbon/settle', ah(async (req, res) => {
     [name],
   );
   res.json({ updated: r.rowCount });
+}));
+
+admin.post('/push/subscribe', ah(async (req, res) => {
+  const sub = (req.body && req.body.subscription) || {};
+  const endpoint = String(sub.endpoint || '');
+  const keys = sub.keys || {};
+  if (!/^https:\/\//.test(endpoint) || endpoint.length > 1000 || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
+    throw bad('Data langganan notifikasi tidak valid.');
+  }
+  await db.query(
+    `INSERT INTO push_subs (endpoint, p256dh, auth) VALUES ($1,$2,$3)
+     ON CONFLICT (endpoint) DO UPDATE SET p256dh = $2, auth = $3`,
+    [endpoint, keys.p256dh.slice(0, 200), keys.auth.slice(0, 100)],
+  );
+  res.status(201).json({ ok: true, enabled: PUSH_ON });
+}));
+
+admin.post('/push/unsubscribe', ah(async (req, res) => {
+  await db.query('DELETE FROM push_subs WHERE endpoint = $1', [String((req.body && req.body.endpoint) || '')]);
+  res.json({ ok: true });
+}));
+
+admin.post('/push/test', ah(async (req, res) => {
+  if (!PUSH_ON) throw bad('Web Push belum aktif di server. Isi VAPID_PUBLIC_KEY dan VAPID_PRIVATE_KEY.');
+  await pushAdmins({ title: 'Tes notifikasi KAmart', body: 'Notifikasi HP sudah aktif.', tag: 'tes', url: '/#pesanan' });
+  res.json({ ok: true });
 }));
 
 app.use('/api/admin', admin);

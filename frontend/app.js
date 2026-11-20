@@ -139,9 +139,9 @@ function notifHtml(){
 }
 function notifSettings(){
   const has='Notification' in window,perm=has?Notification.permission:'unsupported';
-  return '<div class="card" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px"><span style="display:flex;align-items:center;gap:12px;min-width:0"><span class="tile t-lav" style="width:42px;height:42px">'+ic('bell',18)+'</span><span style="min-width:0"><b>Notifikasi pesanan masuk</b><br><small style="color:var(--muted)">Kartu, suara, dan getar di semua halaman admin selama halaman ini terbuka.</small></span></span>'+
+  return '<div class="card" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px"><span style="display:flex;align-items:center;gap:12px;min-width:0"><span class="tile t-lav" style="width:42px;height:42px">'+ic('bell',18)+'</span><span style="min-width:0"><b>Notifikasi pesanan masuk</b><br><small style="color:var(--muted)">Kartu, suara, dan getar saat halaman admin terbuka. Aktifkan notifikasi HP supaya tetap masuk walau aplikasi ditutup.</small></span></span>'+
    '<span style="display:flex;gap:8px;flex-wrap:wrap"><button class="sg'+(S.ns.sound?' on':'')+'" data-act="nsound" aria-pressed="'+S.ns.sound+'">Suara '+(S.ns.sound?'aktif':'mati')+'</button>'+
-   (perm==='granted'&&S.ns.push?'<span class="pill-s ps-ok" style="align-self:center">Notifikasi browser aktif</span>':perm==='denied'?'<span class="pill-s ps-bad" style="align-self:center">Notifikasi browser diblokir</span>':perm==='unsupported'?'':'<button class="sg" data-act="npush">Aktifkan notifikasi browser</button>')+
+   (perm==='granted'&&S.ns.push?'<span class="pill-s ps-ok" style="align-self:center">'+(S.ns.server?'Notifikasi HP aktif':'Notifikasi aktif (hanya saat terbuka)')+'</span>':perm==='denied'?'<span class="pill-s ps-bad" style="align-self:center">Notifikasi diblokir, izinkan di pengaturan situs</span>':perm==='unsupported'?'':'<button class="sg" data-act="npush">Aktifkan notifikasi HP</button>')+
    '<button class="sg" data-act="ntest">Tes notifikasi</button></span></div>';
 }
 function salam(){const h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<18?'Selamat sore':'Selamat malam'}
@@ -158,6 +158,32 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 window.addEventListener('appinstalled',()=>{deferredPrompt=null;toast('KAmart sudah terpasang di HP kamu');render()});
 window.addEventListener('offline',()=>{S.netErr='Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.';render()});
 window.addEventListener('online',()=>{S.netErr='';tick()});
+/* ---------- Web Push: notifikasi HP admin walau aplikasi ditutup ---------- */
+function b64ToU8(s){const p='='.repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function enablePush(silent){
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
+      if(!silent)toast(isIOS()?'Di iPhone: pasang KAmart ke Layar Utama dulu, lalu buka dari ikonnya':'Browser ini tidak mendukung notifikasi');return}
+    const perm=silent?Notification.permission:await Notification.requestPermission();
+    if(perm!=='granted'){S.ns.push=false;S.ns.server=false;ls.set('ns',S.ns);if(!silent)toast('Izin notifikasi tidak diberikan');render();return}
+    const k=await api('GET','/api/push/key');
+    const reg=await navigator.serviceWorker.ready;
+    if(k.publicKey){
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(k.publicKey)});
+      await api('POST','/api/admin/push/subscribe',{subscription:sub.toJSON()},true);S.ns.server=true;
+    }else S.ns.server=false;
+    S.ns.push=true;ls.set('ns',S.ns);
+    if(!silent)toast(k.publicKey?'Notifikasi HP aktif, tetap masuk walau aplikasi ditutup':'Notifikasi aktif, tapi server belum diatur VAPID');
+  }catch(e){if(!silent)toast('Gagal mengaktifkan notifikasi: '+e.message)}
+  render();
+}
+async function disablePush(){
+  try{const reg=await navigator.serviceWorker.getRegistration();const sub=reg&&await reg.pushManager.getSubscription();
+    if(sub){if(S.token)await api('POST','/api/admin/push/unsubscribe',{endpoint:sub.endpoint},true).catch(()=>{});await sub.unsubscribe()}}catch(e){}
+  S.ns.push=false;S.ns.server=false;ls.set('ns',S.ns);
+}
+setTimeout(()=>{if(S.token&&S.ns.push)enablePush(true)},3000);
 if(!navigator.onLine)S.netErr='Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.';
 if('serviceWorker' in navigator)window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{})});
 function installCard(){if(isStandalone()||!(deferredPrompt||isIOS()))return '';
@@ -530,12 +556,9 @@ document.addEventListener('click',async e=>{
   if(act==='dlplaced'&&S.placed){autoReceipt();return}
   if(act==='closeplaced'){S.placed=null;go('pesananku');render();return}
   if(act==='nsound'){S.ns.sound=!S.ns.sound;ls.set('ns',S.ns);if(S.ns.sound)beep();render();return}
-  if(act==='npush'){
-    if(!('Notification' in window)){toast('Browser ini tidak mendukung notifikasi');return}
-    let r='denied';try{r=await Notification.requestPermission()}catch(e){}
-    S.ns.push=r==='granted';ls.set('ns',S.ns);toast(r==='granted'?'Notifikasi browser aktif':'Izin notifikasi tidak diberikan');render();return}
-  if(act==='ntest'){S.alerts=[{id:'tes-'+Date.now(),name:'Contoh pembeli',items:'1× Pop Mie Ayam',total:6000,slot:'Istirahat 12.00',at:Date.now()}].concat(S.alerts).slice(0,3);expireAlerts();if(S.ns.sound)beep();try{if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){}render();return}
-  if(act==='logout'){S.token=null;ls.set('token',null);S.loaded.admin=false;S.products=[];S.orders=[];S.customers=[];S.stockin=[];toast('Kamu sudah keluar dari admin');go('toko');return}
+  if(act==='npush'){await enablePush(false);return}
+  if(act==='ntest'){if(S.ns.push&&S.ns.server)api('POST','/api/admin/push/test',{},true).catch(e=>toast(e.message));S.alerts=[{id:'tes-'+Date.now(),name:'Contoh pembeli',items:'1× Pop Mie Ayam',total:6000,slot:'Istirahat 12.00',at:Date.now()}].concat(S.alerts).slice(0,3);expireAlerts();if(S.ns.sound)beep();try{if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){}render();return}
+  if(act==='logout'){await disablePush();S.token=null;ls.set('token',null);S.loaded.admin=false;S.products=[];S.orders=[];S.customers=[];S.stockin=[];toast('Kamu sudah keluar dari admin');go('toko');return}
   if(act==='resetpin'){S.lg.reset=true;S.lg.err='';S.lg.pin='';S.lg.pin2='';render();return}
   if(act==='cancelreset'){S.lg.reset=false;S.lg.err='';render();return}
   if(act==='clearCart'){S.cart={};render()}

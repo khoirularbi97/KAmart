@@ -57,3 +57,11 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS orders_created ON orders (created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_token ON orders (public_token);
+
+-- Langganan Web Push untuk HP admin (notifikasi pesanan masuk walau aplikasi ditutup).
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint    TEXT PRIMARY KEY,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);

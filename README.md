@@ -111,6 +111,26 @@ KAmart bisa dipasang di layar utama HP:
 Katalog tetap bisa dilihat saat offline (data terakhir). Memesan dan halaman admin tetap butuh internet.
 Setiap rilis, naikkan `VERSION` di `frontend/sw.js` (misalnya `kamart-v2`) supaya HP pengguna mengambil file terbaru.
 
+## Notifikasi HP admin (Web Push)
+
+Notifikasi pesanan baru tetap masuk walau aplikasi KAmart ditutup.
+
+1. Buat kunci VAPID sekali saja di VPS:
+   ```bash
+   cd ~/apps/kamart/backend && npm install --omit=dev
+   npx web-push generate-vapid-keys
+   ```
+2. Salin hasilnya ke `backend/.env`:
+   ```
+   VAPID_PUBLIC_KEY=...
+   VAPID_PRIVATE_KEY=...
+   VAPID_SUBJECT=mailto:emailkamu@contoh.com
+   ```
+3. `pm2 restart kamart-api` (atau `docker compose up -d --build`).
+4. Di HP admin: buka KAmart, masuk admin, buka **Pesanan**, ketuk **Aktifkan notifikasi HP**, izinkan, lalu ketuk **Tes notifikasi**.
+
+Catatan: di iPhone (iOS 16.4+), KAmart harus dipasang ke Layar Utama dulu dan dibuka dari ikonnya. Jangan mengganti kunci VAPID setelah dipakai; kalau terganti, aktifkan ulang notifikasi di setiap HP admin.
+
 ## Menjalankan di komputer sendiri
 
 Butuh Node.js 20+.

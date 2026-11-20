@@ -1,6 +1,6 @@
 /* Service worker KAmart.
  * Naikkan VERSION setiap rilis supaya HP pembeli mengambil file terbaru. */
-const VERSION = 'kamart-v1';
+const VERSION = 'kamart-v2';
 const SHELL = [
   '/',
   '/styles.css',
@@ -73,6 +73,21 @@ self.addEventListener('fetch', (event) => {
       caches.match(req).then((hit) => hit || fetch(req).then((res) => putCache(VERSION + '-fonts', req, res))),
     );
   }
+});
+
+// Web Push dari server: tampil walau aplikasi ditutup.
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'KAmart', body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'KAmart', {
+    body: d.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/favicon.png',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    vibrate: [120, 60, 120],
+    data: { url: d.url || '/#pesanan' },
+  }));
 });
 
 // Notifikasi pesanan masuk (admin): ketuk untuk membuka halaman Pesanan.
