@@ -152,6 +152,25 @@ Tanpa pengaturan apa pun, foto disimpan di tabel `product_images` (database). Ag
 Foto yang sudah ada otomatis dipindahkan saat API dijalankan ulang. Foto lama terhapus dari bucket saat diganti atau dihapus.
 Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `NEON_BUCKET_PUBLIC_URL`.
 
+## Verifikasi Midtrans (aktivasi Production)
+
+Halaman yang biasanya dicek tim Midtrans sudah tersedia di situs (tautan ada di bawah halaman toko dan di tab Akun):
+
+| Halaman | Alamat |
+|---|---|
+| Tentang & Kontak (produk, cara pesan, pengiriman, kontak) | `https://kamart-liart.vercel.app/#tentang` |
+| Syarat & Ketentuan | `https://kamart-liart.vercel.app/#syarat` |
+| Pengembalian & Refund | `https://kamart-liart.vercel.app/#refund` |
+| Kebijakan Privasi | `https://kamart-liart.vercel.app/#privasi` |
+
+Nama pemilik, WhatsApp, email, alamat, dan jam layanan bisa diubah tanpa mengedit `app.js`, cukup lewat `frontend/config.js`:
+```js
+window.KAMART_INFO = { wa: '08xxxxxxxxxx', email: 'kamu@contoh.com', alamat: 'Cikarang, Kabupaten Bekasi, Jawa Barat' };
+```
+
+Dokumen untuk form aktivasi (usaha perorangan): KTP, NPWP pribadi (jika ada), foto buku tabungan/rekening atas nama sendiri, dan swafoto dengan KTP bila diminta.
+Isi jenis usaha sebagai **toko kelontong / makanan & minuman (sembako)**. Rokok tidak dijual di toko online.
+
 ## Menjalankan di komputer sendiri
 
 Butuh Node.js 20+.

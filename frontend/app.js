@@ -6,6 +6,10 @@ const VIEWS=[
   {id:'keranjang',t:'Keranjang',g:'Pembeli',ic:'bag'},
   {id:'pesananku',t:'Pesanan Saya',g:'Pembeli',ic:'inbox'},
   {id:'akun',t:'Akun',g:'Pembeli',ic:'users'},
+  {id:'tentang',t:'Tentang & Kontak',g:'Pembeli',ic:'shop'},
+  {id:'syarat',t:'Syarat & Ketentuan',g:'Pembeli',ic:'inbox'},
+  {id:'refund',t:'Pengembalian & Refund',g:'Pembeli',ic:'money'},
+  {id:'privasi',t:'Kebijakan Privasi',g:'Pembeli',ic:'users'},
   {id:'dashboard',t:'Dashboard',g:'Admin',ic:'home'},
   {id:'pesanan',t:'Pesanan',g:'Admin',ic:'inbox'},
   {id:'kasir',t:'Kasir',g:'Admin',ic:'pos'},
@@ -99,7 +103,7 @@ function renderShell(){
   const v=VIEWS.find(x=>x.id===S.view);
   document.getElementById('mbar').innerHTML='<span style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="" width="34" height="34" style="border-radius:50%"><b>KAmart</b></span><span style="font-size:12px;color:#EDE7FF">'+v.g+' · '+v.t+'</span>';
   const nNew=valid().filter(o=>o.stage===0).length;
-  const subs={toko:'Pesan sekarang, ambil saat istirahat',dashboard:salam()+', Arbi',pesanan:'Alur pesanan dari Baru sampai Selesai',kasir:'Transaksi langsung di tempat',produk:'Harga, margin, dan sisa stok',stok:'Catat belanja dari grosir',kasbon:'Kasbon dan pesanan yang belum dibayar',rekap:'Ringkasan per bulan'};
+  const subs={tentang:'Tentang KAmart',syarat:'Aturan berbelanja',refund:'Pembatalan dan pengembalian dana',privasi:'Perlindungan data pembeli',toko:'Pesan sekarang, ambil saat istirahat',dashboard:salam()+', Arbi',pesanan:'Alur pesanan dari Baru sampai Selesai',kasir:'Transaksi langsung di tempat',produk:'Harga, margin, dan sisa stok',stok:'Catat belanja dari grosir',kasbon:'Kasbon dan pesanan yang belum dibayar',rekap:'Ringkasan per bulan'};
   document.getElementById('top').innerHTML='<div><h1>'+v.t+'</h1><div class="sub">'+subs[v.id]+'</div></div>'+
     '<div class="tbtns">'+(v.g==='Admin'?layoutSwitch():'')+(v.g==='Admin'?'<button class="cbtn'+(unseenOrders().length?' ring-on':'')+'" data-go="pesanan" aria-label="Pesanan baru: '+nNew+'">'+ic('bell')+(nNew?'<em>'+nNew+'</em>':'')+'</button>':'')+
     '<button class="btn2" data-go="'+(v.g==='Admin'?'toko':'dashboard')+'">'+(v.g==='Admin'?'Lihat toko':'Masuk admin')+'</button>'+(v.g==='Admin'?'<button class="btn2" data-act="logout">Keluar</button>':'')+'</div>';
@@ -234,7 +238,7 @@ function vToko(){
   (shown.length?'<div class="mgrid">'+shown.map(p=>{const st=stockOf(p.kode),qq=S.cart[p.kode]||0,c=(CAT_STYLE[p.cat]||CAT_STYLE.Lainnya)[0];
     return '<article class="mc"><div class="ph b-'+c+'">'+(p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'">':prodTile(p,true))+'</div><div class="nm">'+esc(p.name)+'</div><div class="st">'+(st>0?'Sisa '+st+' '+esc(p.unit||''):'Stok habis')+'</div><div class="qty"><span class="pr num">'+rp(p.jual)+'</span>'+stepper(p.kode,qq,st,p.name)+'</div></article>'}).join('')+'</div>'
     :'<div class="card empty">'+(q?'Tidak ada produk bernama "'+esc(S.q)+'".':'Belum ada produk yang dijual online.')+'</div>')+
-  '</div>';
+  infoFooter()+'</div>';
 }
 function vKeranjang(){
   const lines=cartLines(S.cart,S.pub),total=sum(lines,l=>l.qty*l.price),cnt=sum(lines,l=>l.qty),reg=S.reg;
@@ -251,7 +255,7 @@ function vKeranjang(){
     (S.co.pay==='Kasbon'&&!reg?'<small style="color:var(--bad)">Bayar pas gajian khusus pelanggan terdaftar.</small>':'<small style="color:var(--muted)">'+(S.co.pay==='QRIS'?'QRIS dengan nominal otomatis muncul setelah kamu pesan.':S.co.pay==='Kasbon'?'Dicatat sebagai kasbon, ditagih saat gajian.':reg?'Bayar saat ambil barang.':'Bayar saat ambil barang. Bayar pas gajian khusus pelanggan terdaftar.')+'</small>')+'</div>'+
    '<label class="f">Catatan<input class="in" id="co-note" data-bind="co.note" value="'+esc(S.co.note)+'" placeholder="Opsional, misal: tanpa sendok"></label>'+
    '<div class="card stack" style="gap:6px;padding:16px"><div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Subtotal</span><span class="num">'+rp(total)+'</span></div><div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Ambil di tempat</span><span style="color:var(--ok);font-weight:700">Gratis</span></div><div class="tot"><span>Total</span><span class="num">'+rp(total)+'</span></div></div>'+
-   '<button class="btn" type="submit" style="height:52px"'+(S.busy?' disabled':'')+'>Pesan sekarang · '+rp(total)+'</button></form></div>';
+   '<button class="btn" type="submit" style="height:52px"'+(S.busy?' disabled':'')+'>Pesan sekarang · '+rp(total)+'</button><small style="color:var(--muted);text-align:center;font-size:12px">Dengan memesan, kamu menyetujui <a href="#syarat">Syarat &amp; Ketentuan</a> dan <a href="#refund">Kebijakan Refund</a> KAmart.</small></form></div>';
   return h;
 }
 function queueOrders(){return S.queue.slice()}
@@ -281,8 +285,46 @@ function vAkun(){
    '<small style="color:var(--muted)">'+(c?'Kamu bisa memakai Bayar pas gajian.':'Bayar pas gajian hanya untuk pelanggan terdaftar. Minta penjual mendaftarkan namamu.')+'</small></div>'+
   '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><div class="stat b-lav" style="padding:14px"><span class="lb">Total pesanan</span><span class="vl num" style="font-size:20px">'+mine.length+'</span></div><div class="stat b-gold" style="padding:14px"><span class="lb">Kasbon</span><span class="vl num" style="font-size:20px">'+rp(kb)+'</span></div></div>'+
   installCard()+'<div class="card stack" style="gap:4px;font-size:13px;padding:16px"><b>Info ambil pesanan</b><span style="color:var(--muted)">Ambil di parkiran motor / pos sesuai jam yang dipilih. Order tutup 30 menit sebelum istirahat.</span></div>'+
+  '<div class="card stack" style="gap:2px;padding:8px 16px"><b style="padding:8px 0 4px">Informasi toko</b>'+INFO_PAGES.map(([id,t])=>'<button class="li linkrow" data-go="'+id+'"><span>'+t+'</span><span aria-hidden="true">›</span></button>').join('')+'</div>'+
   '<button class="btn2" data-go="dashboard" style="justify-content:center;height:46px">Masuk admin</button></div>';
 }
+/* ---------- halaman informasi (syarat verifikasi payment gateway) ---------- */
+const INFO=Object.assign({nama:'KAmart',pemilik:'Khoirul Arbi',wa:'0895369834425',email:'khoirularbi729@gmail.com',alamat:'Cikarang, Kabupaten Bekasi, Jawa Barat',jam:'Senin–Sabtu, 07.00–17.00 WIB',berlaku:'21 November 2026'},window.KAMART_INFO||{});
+const INFO_PAGES=[['tentang','Tentang & Kontak'],['syarat','Syarat & Ketentuan'],['refund','Pengembalian & Refund'],['privasi','Kebijakan Privasi']];
+const waLink=()=>'https://wa.me/62'+String(INFO.wa).replace(/\D/g,'').replace(/^0|^62/,'');
+function infoFooter(){return '<footer class="infofoot"><nav aria-label="Informasi toko">'+INFO_PAGES.map(([id,t])=>'<a href="#'+id+'">'+t+'</a>').join('')+'</nav><span>© 2026 '+esc(INFO.nama)+' · '+esc(INFO.alamat)+'</span></footer>'}
+function infoPage(title,sub,secs){return shopHead(esc(title),esc(sub),'<button class="iconbtn" data-go="akun" aria-label="Kembali">‹</button>')+
+  '<div class="stack legal" style="gap:12px">'+secs.map(([h,b])=>'<section class="card stack" style="gap:8px;padding:16px">'+(h?'<h2>'+esc(h)+'</h2>':'')+b+'</section>').join('')+
+  '<small style="color:var(--muted);text-align:center">Berlaku sejak '+esc(INFO.berlaku)+'</small>'+infoFooter()+'</div>'}
+const ul=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+function contactHtml(){return ul(['WhatsApp: <a href="'+waLink()+'" target="_blank" rel="noopener">'+esc(INFO.wa)+'</a>','Email: <a href="mailto:'+esc(INFO.email)+'">'+esc(INFO.email)+'</a>','Alamat: '+esc(INFO.alamat),'Jam layanan: '+esc(INFO.jam)])}
+function vTentang(){return infoPage('Tentang & Kontak','KAmart, toko kelontong online',[
+  ['Tentang KAmart','<p>'+esc(INFO.nama)+' adalah toko kelontong online milik '+esc(INFO.pemilik)+' yang menjual makanan instan, minuman, dan kebutuhan sehari-hari untuk karyawan di lingkungan kawasan industri Cikarang. Pembeli memesan lewat situs ini lalu mengambil pesanan pada jam istirahat.</p>'],
+  ['Produk yang dijual','<p>Mi instan cup (Pop Mie), kopi dan minuman sachet, minuman kemasan, serta sembako dan kebutuhan harian. Daftar produk, harga, dan sisa stok selalu tampil terbaru di halaman Belanja.</p>'],
+  ['Cara memesan',ul(['Pilih produk di halaman Belanja dan masukkan ke keranjang.','Isi nama, bagian/line, dan jam pengambilan.','Pilih pembayaran: Tunai saat ambil, QRIS, atau Bayar pas gajian (khusus pelanggan terdaftar).','Pantau status pesanan di menu Pesanan: Baru, Disiapkan, Siap diambil, Selesai.','Ambil pesanan di titik ambil sesuai jam yang dipilih dan tunjukkan kode pesanan.'])],
+  ['Pengiriman','<p>KAmart tidak melakukan pengiriman lewat kurir. Semua pesanan diambil langsung oleh pembeli di titik ambil pada hari yang sama. Tidak ada ongkos kirim.</p>'],
+  ['Hubungi kami',contactHtml()]])}
+function vSyarat(){return infoPage('Syarat & Ketentuan','Aturan berbelanja di KAmart',[
+  ['','<p>Dengan memakai situs dan melakukan pemesanan di '+esc(INFO.nama)+', kamu dianggap telah membaca dan menyetujui ketentuan berikut.</p>'],
+  ['1. Pemesanan',ul(['Pesanan dianggap masuk setelah muncul kode pesanan (contoh KA-1A2B) dan struk.','Order untuk satu jam istirahat ditutup 30 menit sebelum jam istirahat dimulai.','KAmart berhak membatalkan pesanan bila stok habis, data pemesan tidak jelas, atau ada indikasi penyalahgunaan. Pembeli akan dihubungi dan dana dikembalikan sesuai Kebijakan Refund.'])],
+  ['2. Harga dan stok',ul(['Harga yang berlaku adalah harga yang tampil saat pesanan dibuat, dalam Rupiah, tanpa biaya tambahan.','Stok dihitung otomatis oleh sistem. Bila terjadi selisih stok, KAmart akan menghubungi pembeli sebelum pesanan disiapkan.'])],
+  ['3. Pembayaran',ul(['Tunai: dibayar saat pesanan diambil.','QRIS: dibayar sesuai nominal pesanan, dapat memakai DANA, GoPay, OVO, ShopeePay, LinkAja, atau aplikasi m-banking yang mendukung QRIS.','Bayar pas gajian (kasbon): hanya untuk pelanggan yang sudah didaftarkan oleh KAmart, wajib dilunasi pada tanggal gajian berikutnya.','Pembayaran dianggap sah setelah dikonfirmasi oleh sistem atau admin KAmart.'])],
+  ['4. Pengambilan',ul(['Pesanan diambil sendiri di titik ambil sesuai jam yang dipilih, dengan menunjukkan kode pesanan.','Pesanan yang tidak diambil sampai akhir hari kerja dapat dibatalkan. Pesanan yang sudah dibayar dan tidak diambil akan dihubungi lebih dulu sebelum dibatalkan.'])],
+  ['5. Produk terbatas','<p>Produk tembakau/rokok tidak dijual melalui toko online dan hanya dilayani langsung kepada pembeli berusia 18 tahun ke atas.</p>'],
+  ['6. Perubahan ketentuan','<p>KAmart dapat memperbarui ketentuan ini sewaktu-waktu. Versi terbaru selalu tersedia di halaman ini.</p>'],
+  ['Kontak',contactHtml()]])}
+function vRefund(){return infoPage('Pengembalian & Refund','Kebijakan pembatalan, penukaran, dan pengembalian dana',[
+  ['Pembatalan oleh pembeli',ul(['Pesanan dapat dibatalkan selama statusnya masih <b>Baru</b>, dengan menghubungi KAmart lewat WhatsApp dan menyebutkan kode pesanan.','Pesanan yang sudah berstatus Disiapkan atau Siap diambil tidak dapat dibatalkan, kecuali ada kesalahan dari pihak KAmart.'])],
+  ['Pembatalan oleh KAmart','<p>Bila pesanan dibatalkan oleh KAmart (misalnya stok habis), pesanan yang sudah dibayar akan dikembalikan <b>100%</b>.</p>'],
+  ['Produk rusak, salah, atau kedaluwarsa',ul(['Periksa pesanan saat pengambilan. Laporkan produk yang rusak, salah, atau kedaluwarsa paling lambat <b>1×24 jam</b> setelah pengambilan dengan foto produk dan kode pesanan.','KAmart akan menukar produk yang sama atau mengembalikan dana sesuai harga produk tersebut, sesuai pilihan pembeli.','Produk yang sudah dibuka atau dikonsumsi tanpa cacat dari pabrik tidak dapat dikembalikan.'])],
+  ['Cara dan waktu pengembalian dana',ul(['Pembayaran QRIS: dikembalikan ke rekening atau e-wallet atas nama pembeli, atau tunai bila pembeli memilih, paling lambat <b>3 hari kerja</b> setelah pengajuan disetujui.','Pembayaran tunai: dikembalikan tunai saat itu juga atau di pengambilan berikutnya.','Kasbon: tagihan dihapus atau dikurangi sesuai nilai produk.'])],
+  ['Ajukan pengembalian',contactHtml()]])}
+function vPrivasi(){return infoPage('Kebijakan Privasi','Data apa yang kami simpan dan untuk apa',[
+  ['Data yang dikumpulkan',ul(['Nama dan bagian/line yang kamu isi saat memesan.','Isi pesanan, jam pengambilan, metode dan status pembayaran.','Data pembayaran QRIS diproses oleh penyedia pembayaran. KAmart tidak menyimpan nomor kartu, PIN, atau data rekening pembeli.'])],
+  ['Penggunaan data','<p>Data dipakai hanya untuk memproses pesanan, menghubungi pembeli terkait pesanan, mencatat tagihan kasbon, dan menyusun rekap penjualan toko. Data tidak dijual atau dibagikan kepada pihak lain, kecuali kepada penyedia pembayaran untuk memproses transaksi atau bila diwajibkan oleh hukum.</p>'],
+  ['Penyimpanan di perangkat','<p>Nama, bagian/line, dan daftar pesanan disimpan di browser HP kamu supaya tidak perlu diisi ulang. Kamu bisa menghapusnya dengan menghapus data situs di pengaturan browser.</p>'],
+  ['Antrean pesanan','<p>Halaman Pesanan hanya menampilkan nama depan dan status pesanan yang masih diproses. Harga, isi lengkap, dan riwayat pesanan orang lain tidak ditampilkan.</p>'],
+  ['Hak kamu','<p>Kamu dapat meminta data pesananmu dilihat, diperbaiki, atau dihapus dengan menghubungi kami.</p>'+contactHtml()]])}
 function itemsText(o){return (o.items||[]).map(i=>i.qty+'× '+i.name).join(', ')}
 function stagePill(s){return ['ps-lav','ps-bad','ps-warn','ps-ok'][s]||'ps-lav'}
 function plantHtml(){return '<div class="plant" aria-hidden="true">'+
@@ -396,7 +438,7 @@ function vProduk(){
      '<label class="f">Stok minimum<input class="in num" id="p-min" type="number" min="0" data-bind="pf.min" value="'+esc(f.min)+'"></label>'+
      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="p-online" data-bind="pf.online"'+(f.online?' checked':'')+(f.cat==='Rokok'?' disabled':'')+'> Tampil di toko online</label>'+
      '</div>'+
-     '<div class="imgpick"><div class="imgbox">'+(f.img?'<img src="'+esc(f.img)+'" alt="Foto '+esc(f.name)+'">':ic('box',30))+'</div><div class="stack" style="gap:6px"><span style="font-size:12px;font-weight:600;color:#54496A">Foto produk</span><div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn2" for="p-img" style="cursor:pointer">'+(f.img?'Ganti foto':'Pilih foto')+'</label><input id="p-img" type="file" accept="image/*" class="sr">'+(f.img?'<button type="button" class="btn3 dang" data-act="pimgdel">Hapus foto</button>':'')+'</div><small style="color:var(--muted)">Dari galeri atau kamera HP. Otomatis diperkecil.</small></div></div>'+(f.cat==='Rokok'?'<div class="banner b-gold" style="color:var(--warn)">Rokok tidak ditampilkan di toko online (wajib verifikasi umur), hanya dijual lewat Kasir.</div>':'')+'<div><button class="btn" type="submit">Simpan produk</button></div></form>'
+     '<div class="imgpick"><div class="imgbox">'+(f.img?'<img src="'+esc(f.img)+'" alt="Foto '+esc(f.name)+'">':ic('box',30))+'</div><div class="stack" style="gap:6px"><span style="font-size:12px;font-weight:600;color:#54496A">Foto produk</span><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn2" data-act="pimgpick"'+(S.imgBusy?' disabled':'')+'>'+(S.imgBusy?'Memproses foto…':(f.img?'Ganti foto':'Pilih foto'))+'</button>'+(f.img?'<button type="button" class="btn3 dang" data-act="pimgdel">Hapus foto</button>':'')+'</div><small style="color:var(--muted)">Dari galeri atau kamera HP. Otomatis diperkecil.</small></div></div>'+(f.cat==='Rokok'?'<div class="banner b-gold" style="color:var(--warn)">Rokok tidak ditampilkan di toko online (wajib verifikasi umur), hanya dijual lewat Kasir.</div>':'')+'<div><button class="btn" type="submit">Simpan produk</button></div></form>'
      :'<div><button class="btn" data-act="pnew">'+ic('plus',18,2.4)+'Tambah produk</button></div>')+
    '<div class="card"><div class="tbl"><table><thead><tr><th>Produk</th><th>Kategori</th><th>Modal</th><th>Jual</th><th>Untung</th><th>Sisa stok</th><th>Status</th><th>Online</th><th></th></tr></thead><tbody>'+
    (list.length?list.map(p=>{const st=stockOf(p.kode),low=st<=(+p.min||0),u=(+p.jual||0)-(+p.modal||0);
@@ -473,7 +515,7 @@ async function doLogin(){const L=S.lg;S.busy=true;L.err='';render();
   try{const r=await api('POST','/api/auth/login',{username:L.user.trim(),password:L.pass});S.token=r.token;ls.set('token',r.token);S.lg={user:'',pass:'',err:''};S.busy=false;toast('Selamat datang!');await loadAdmin()}
   catch(e){L.err=e.message;L.pass='';S.busy=false;render()}}
 
-const RENDER={toko:vToko,keranjang:vKeranjang,pesananku:vPesananku,akun:vAkun,dashboard:vDashboard,pesanan:vPesanan,kasir:vKasir,produk:vProduk,stok:vStok,kasbon:vKasbon,rekap:vRekap};
+const RENDER={tentang:vTentang,syarat:vSyarat,refund:vRefund,privasi:vPrivasi,toko:vToko,keranjang:vKeranjang,pesananku:vPesananku,akun:vAkun,dashboard:vDashboard,pesanan:vPesanan,kasir:vKasir,produk:vProduk,stok:vStok,kasbon:vKasbon,rekap:vRekap};
 function render(){
   notifyNew();
   if(isAuthed()&&S.view==='pesanan'&&(S.loaded.orders||S.loaded.admin))markSeen();
@@ -608,6 +650,7 @@ document.addEventListener('click',async e=>{
   if(act==='pnew'){S.pf={kode:'',name:'',cat:'Makanan',unit:'pcs',modal:'',jual:'',min:5,online:true};render()}
   if(act==='pclose'){S.pf=null;render()}
   if(act==='pimgdel'&&S.pf){S.pf.img='';render()}
+  if(act==='pimgpick'&&S.pf&&!S.imgBusy){imgInput.value='';imgInput.click()}
   if(act==='closeReceipt'){S.receipt=null;render()}
   if(act==='copyReceipt'&&S.receipt)copyText(receiptText(S.receipt));
   if(act==='kpay')await kasirPay();
@@ -621,18 +664,31 @@ document.addEventListener('submit',async e=>{
   if(id==='sForm')await saveStock();
   if(id==='cForm')await saveCustomer();
 });
-async function shrink(file){
+// Gambar: dibaca dengan <img>, kalau gagal (mis. HEIC) coba createImageBitmap.
+async function decodeImg(file){
   const url=URL.createObjectURL(file);
-  try{
-    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});
-    const M=800,s=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
-    const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*s));c.height=Math.max(1,Math.round(img.naturalHeight*s));
-    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
-    return c.toDataURL('image/jpeg',0.82);
-  }finally{URL.revokeObjectURL(url)}
+  try{return await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res({src:i,w:i.naturalWidth,h:i.naturalHeight});i.onerror=rej;i.src=url})}
+  catch(e){if(!window.createImageBitmap)throw e;const b=await createImageBitmap(file);return{src:b,w:b.width,h:b.height}}
+  finally{setTimeout(()=>URL.revokeObjectURL(url),0)}
 }
-document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='p-img'||!t.files||!t.files[0]||!S.pf)return;
-  try{S.pf.img=await shrink(t.files[0]);render()}catch(err){toast('Foto tidak bisa dibaca. Coba file JPG atau PNG.')}});
+async function shrink(file){
+  const d=await decodeImg(file);if(!d.w||!d.h)throw new Error('kosong');
+  const M=800,s=Math.min(1,M/Math.max(d.w,d.h));
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round(d.w*s));c.height=Math.max(1,Math.round(d.h*s));
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(d.src,0,0,c.width,c.height);
+  if(d.src.close)d.src.close();
+  return c.toDataURL('image/jpeg',0.82);
+}
+// Satu input file tetap di luar area yang di-render ulang. Sebelumnya input ikut diganti
+// saat data diperbarui otomatis (tiap 10 detik / kembali dari galeri), sehingga foto dari galeri hilang.
+const imgInput=document.createElement('input');
+imgInput.type='file';imgInput.accept='image/*';imgInput.id='p-img';imgInput.className='sr';imgInput.tabIndex=-1;imgInput.setAttribute('aria-hidden','true');
+document.body.appendChild(imgInput);
+imgInput.addEventListener('change',async()=>{const f=imgInput.files&&imgInput.files[0];if(!f||!S.pf)return;
+  if(f.size>25*1024*1024){toast('Foto terlalu besar (maks 25 MB).');imgInput.value='';return}
+  S.imgBusy=true;render();
+  try{const data=await shrink(f);if(S.pf)S.pf.img=data}catch(err){toast('Foto tidak bisa dibaca. Coba file JPG atau PNG.')}
+  S.imgBusy=false;imgInput.value='';render()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor)){S.receipt=null;S.placed=null;S.qrisFor=null;render()}});
 
 function orderBody(lines,extra){const total=sum(lines,l=>l.qty*l.price);return Object.assign({createdAt:new Date().toISOString(),items:lines,total,modalTotal:sum(lines,l=>l.qty*l.modal)},extra)}
