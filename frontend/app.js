@@ -42,7 +42,7 @@ const S={products:[],customers:[],orders:[],stockin:[],loaded:{},db:null,offline
   view:'toko',cat:'Semua',cart:{},co:Object.assign({name:'',line:'',slot:'Istirahat 12.00',pay:'QRIS',note:''},ls.get('me',{})),
   k:{cart:{},buyer:'',method:'Tunai',cash:0},receipt:null,confirm:null,
   pf:null,sf:{date:new Date().toISOString().slice(0,10),kode:'',qty:'',harga:'',tempat:'',upd:true},
-  cf:{name:'',line:'',wa:''},month:mk(new Date()),kfilter:'Belum',lastPlaced:null,busy:false,q:'',layout:ls.get('layout','auto'),mine:[],placed:null,placedDl:'',alerts:[],alerted:new Set(),ns:ls.get('ns',{sound:true,push:false}),
+  cf:{name:'',line:'',wa:''},month:mk(new Date()),kfilter:'Belum',lastPlaced:null,busy:false,q:'',qrisFor:null,qrisStatic:false,layout:ls.get('layout','auto'),mine:[],placed:null,placedDl:'',alerts:[],alerted:new Set(),ns:ls.get('ns',{sound:true,push:false}),
   token:ls.get('token',null),pub:[],mine:[],queue:[],reg:false,netErr:'',lg:{user:'',pass:'',err:''}};
 const SLOTS=['Pagi 09.30','Istirahat 12.00','Istirahat 18.00','Pulang shift 1','Pulang shift 2'];
 
@@ -248,7 +248,7 @@ function vKeranjang(){
     '<datalist id="custList">'+S.customers.map(c=>'<option value="'+esc(c.name)+'">').join('')+'</datalist></div>'+
    '<div class="card stack" style="gap:10px;padding:16px"><h3 style="font-size:15px">Waktu ambil</h3><div class="seg">'+SLOTS.map(s=>'<button type="button" class="sg'+(S.co.slot===s?' on':'')+'" data-coslot="'+s+'" aria-pressed="'+(S.co.slot===s)+'">'+s+'</button>').join('')+'</div><small style="color:var(--muted)">Ambil di parkiran motor / pos.</small></div>'+
    '<div class="card stack" style="gap:10px;padding:16px"><h3 style="font-size:15px">Pembayaran</h3><div class="seg" role="radiogroup" aria-label="Pembayaran">'+['QRIS','Tunai','Kasbon'].map(m=>'<button type="button" class="sg'+(S.co.pay===m?' on':'')+'" role="radio" aria-checked="'+(S.co.pay===m)+'" data-copay="'+m+'"'+(m==='Kasbon'&&!reg?' disabled':'')+'>'+(m==='Kasbon'?'Bayar pas gajian':m)+'</button>').join('')+'</div>'+
-    (S.co.pay==='Kasbon'&&!reg?'<small style="color:var(--bad)">Bayar pas gajian khusus pelanggan terdaftar.</small>':'<small style="color:var(--muted)">'+(S.co.pay==='Kasbon'?'Dicatat sebagai kasbon, ditagih saat gajian.':reg?'Bayar saat ambil barang.':'Bayar saat ambil barang. Bayar pas gajian khusus pelanggan terdaftar.')+'</small>')+'</div>'+
+    (S.co.pay==='Kasbon'&&!reg?'<small style="color:var(--bad)">Bayar pas gajian khusus pelanggan terdaftar.</small>':'<small style="color:var(--muted)">'+(S.co.pay==='QRIS'?'QRIS dengan nominal otomatis muncul setelah kamu pesan.':S.co.pay==='Kasbon'?'Dicatat sebagai kasbon, ditagih saat gajian.':reg?'Bayar saat ambil barang.':'Bayar saat ambil barang. Bayar pas gajian khusus pelanggan terdaftar.')+'</small>')+'</div>'+
    '<label class="f">Catatan<input class="in" id="co-note" data-bind="co.note" value="'+esc(S.co.note)+'" placeholder="Opsional, misal: tanpa sendok"></label>'+
    '<div class="card stack" style="gap:6px;padding:16px"><div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Subtotal</span><span class="num">'+rp(total)+'</span></div><div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Ambil di tempat</span><span style="color:var(--ok);font-weight:700">Gratis</span></div><div class="tot"><span>Total</span><span class="num">'+rp(total)+'</span></div></div>'+
    '<button class="btn" type="submit" style="height:52px"'+(S.busy?' disabled':'')+'>Pesan sekarang · '+rp(total)+'</button></form></div>';
@@ -269,7 +269,7 @@ function vPesananku(){
     '<div class="steps" role="img" aria-label="Tahap '+(o.stage+1)+' dari 4">'+STAGES.map((s,i)=>'<i'+(i<=o.stage?' class="on"':'')+'></i>').join('')+'</div>'+
     '<div style="font-size:13px">'+esc(itemsText(o))+'</div>'+
     (me&&o.stage===2?'<div class="banner b-lav" style="font-weight:600">Siap diambil! Tunjukkan kode '+esc(m.code||'')+'.</div>':'')+
-    (me?'<button class="btn3" data-receipt="'+esc(o.id)+'" style="align-self:flex-start">Unduh struk</button>':'')+'</article>'}).join('');
+    (me?'<div style="display:flex;gap:6px;flex-wrap:wrap">'+(m.pay==='QRIS'&&!m.paid?'<button class="btn3" data-qrisfor="'+esc(o.id)+'">Bayar QRIS</button>':'')+'<button class="btn3" data-receipt="'+esc(o.id)+'">Unduh struk</button></div>':'')+'</article>'}).join('');
   return h+'</div>';
 }
 function vAkun(){
@@ -376,7 +376,7 @@ function vKasir(){
    (k.method==='Tunai'?'<div class="seg">'+[['Uang pas',total],['20rb',20000],['50rb',50000],['100rb',100000]].map(([l,v])=>'<button type="button" class="sg'+(+k.cash===v&&cnt?' on':'')+'" data-cash="'+v+'">'+l+'</button>').join('')+'</div>'+
      '<label class="f">Uang diterima<input class="in num" id="k-cash" type="number" inputmode="numeric" min="0" data-bind="k.cash" data-live="1" value="'+(+k.cash||'')+'"></label>'+
      '<div class="banner '+(change>=0?'b-lav':'b-pink')+'" style="display:flex;justify-content:space-between;font-weight:700"><span>'+(change>=0?'Kembalian':'Kurang')+'</span><span class="num">'+rp(Math.abs(change))+'</span></div>'
-    :k.method==='QRIS'?'<div class="banner b-blue">Tunjukkan QRIS KAmart, tekan Bayar setelah dana masuk.</div>'
+    :k.method==='QRIS'?(total>0?qrisBlock(total)+'<div class="banner b-blue">Minta pembeli scan, tekan Bayar setelah notifikasi dana masuk di DANA.</div>':'<div class="banner b-blue">Pilih produk dulu untuk menampilkan QRIS.</div>')
     :'<div class="banner b-gold" style="color:var(--warn)">'+(k.buyer?'Dicatat sebagai kasbon atas nama '+esc(k.buyer)+'. Kasbon berjalan: '+rp(sum(unpaidKasbon().filter(o=>o.customerName===k.buyer),o=>+o.total||0))+'.':'Pilih nama pembeli untuk mencatat kasbon.')+'</div>')+
    (rokok?'<div style="font-size:12px;font-weight:600;color:var(--bad)">Ada rokok di transaksi ini: pastikan pembeli berusia 21+.</div>':'')+
    '<button class="btn" data-act="kpay"'+(can?'':' disabled')+'>Bayar '+rp(total)+'</button></aside></div>';
@@ -483,7 +483,7 @@ function render(){
   document.body.classList.toggle('loginmode',locked);
   renderShell();
   document.getElementById('view').innerHTML=(S.netErr?'<div class="banner b-gold" role="status" style="color:var(--warn);margin-bottom:14px">'+esc(S.netErr)+'</div>':'')+(locked?vLogin():RENDER[S.view]());
-  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():'';
+  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():S.qrisFor?qrisModalHtml():'';
   document.getElementById('notif').innerHTML=notifHtml();
   if(fid){const el=document.getElementById(fid);if(el&&el!==document.activeElement){el.focus({preventScroll:true});try{if(s1!=null)el.setSelectionRange(s1,s2)}catch(e){}}}
 }
@@ -493,6 +493,27 @@ function receiptHtml(){const o=S.receipt;return '<div class="modal" role="dialog
  '<div class="li" style="border:0;font-weight:800"><span>Total</span><span class="num">'+rp(o.total)+'</span></div>'+
  (o.pay==='Tunai'?'<div class="li" style="border:0"><span>Diterima</span><span class="num">'+rp(o.cashIn)+'</span></div><div class="li" style="border:0"><span>Kembalian</span><span class="num">'+rp(o.change)+'</span></div>':'<div class="li" style="border:0"><span>Metode</span><span>'+(o.pay==='Kasbon'?'Kasbon · belum dibayar':'QRIS')+'</span></div>')+
  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn2" data-act="copyReceipt" style="justify-content:center">Salin struk</button><button class="btn" data-act="closeReceipt">Transaksi baru</button></div><textarea id="rcpt" class="in" rows="4" readonly hidden>'+esc(receiptText(o))+'</textarea></div></div>'}
+
+/* ---------- QRIS (DANA · KAmart, Sembako) ---------- */
+const QRIS_STATIC=window.KAMART_QRIS||'00020101021126570011ID.DANA.WWW011893600915303719908802090371990880303UMI51440014ID.CO.QRIS.WWW0215ID10266444066170303UMI5204549953033605802ID5915KAmart, Sembako6012Kab. Kebumen610554314630447DB';
+const QRIS_NAME='KAmart, Sembako',QRIS_NMID='ID1026644406617';
+function crc16(s){let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let j=0;j<8;j++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,'0')}
+// Ubah QRIS statis menjadi QRIS dengan nominal (tag 54) dan hitung ulang CRC.
+function qrisAmount(base,amount){const tl=[];let i=0;while(i<base.length){const t=base.substr(i,2),l=parseInt(base.substr(i+2,2),10);tl.push([t,base.substr(i+4,l)]);i+=4+l}
+  const out=tl.filter(([t])=>t!=='63'&&t!=='54').map(([t,v])=>t==='01'?['01','12']:[t,v]);
+  let k=out.findIndex(([t])=>t>'54');if(k<0)k=out.length;out.splice(k,0,['54',String(Math.round(amount))]);
+  const s=out.map(([t,v])=>t+String(v.length).padStart(2,'0')+v).join('')+'6304';return s+crc16(s)}
+function qrisSvg(text){try{if(typeof qrcode!=='function')return '';const q=qrcode(0,'M');q.addData(text);q.make();return q.createSvgTag({cellSize:6,margin:3,scalable:true,alt:'QRIS KAmart'})}catch(e){return ''}}
+function qrisBlock(amount){
+  const svg=amount>0&&!S.qrisStatic?qrisSvg(qrisAmount(QRIS_STATIC,amount)):'';
+  return '<div class="qris"><div class="qhead"><b>QRIS</b><span>'+esc(QRIS_NAME)+'</span></div>'+
+   (svg?'<div class="qcode" role="img" aria-label="QRIS '+rp(amount)+'">'+svg+'</div>':'<img class="qimg" src="qris-kamart.jpg" alt="QRIS KAmart">')+
+   '<div class="qamt num">'+rp(amount)+'</div>'+
+   '<small style="font-size:12px">'+(svg?'Nominal sudah terisi otomatis. Scan pakai DANA, GoPay, OVO, ShopeePay, atau m-banking.':'Scan lalu masukkan nominal <b>'+rp(amount)+'</b>.')+'</small>'+
+   '<small style="color:var(--muted);font-size:11px">NMID '+QRIS_NMID+'</small>'+
+   '<button type="button" class="linkbtn" data-act="qristoggle" style="font-size:12px">'+(S.qrisStatic?'Pakai QRIS dengan nominal otomatis':'Nominal tidak muncul? Pakai QRIS biasa')+'</button></div>'}
+function qrisModalHtml(){const o=findOrder(S.qrisFor);if(!o)return '';
+  return '<div class="modal" role="dialog" aria-modal="true" aria-label="Bayar dengan QRIS"><div class="box" style="align-items:center;text-align:center"><b style="font-size:17px">Bayar pesanan '+esc(o.code||'')+'</b>'+qrisBlock(o.total)+'<small style="color:var(--muted)">Pesanan ditandai lunas oleh penjual setelah dana masuk.</small><button class="btn" data-act="qrisclose" style="width:100%">Tutup</button></div></div>'}
 
 /* ---------- struk pesanan (PNG) ---------- */
 let LOGO=null;
@@ -531,6 +552,7 @@ function placedHtml(){const o=S.placed;
   return '<div class="modal" role="dialog" aria-modal="true" aria-label="Pesanan terkirim"><div class="box" style="align-items:center;text-align:center"><span class="tile t-lav" style="border-radius:50%;width:56px;height:56px">'+ic('check',26,2.6)+'</span><b style="font-size:18px">Pesanan terkirim!</b><span style="color:var(--muted);font-size:13px">Tunjukkan kode ini saat mengambil pesanan</span>'+
   '<div class="num" style="font-size:30px;font-weight:800;letter-spacing:.06em;color:var(--primary-ink);background:var(--primary-soft);border-radius:16px;padding:10px 22px">'+esc(o.code)+'</div>'+
   '<div style="font-size:13px">'+esc(itemsText(o))+'<br><b class="num">'+rp(o.total)+'</b> · '+esc(o.slot||'')+'</div>'+
+  (o.pay==='QRIS'&&!o.paid?qrisBlock(o.total)+'<small style="color:var(--muted)">Bayar sekarang atau saat ambil. Penjual menandai lunas setelah dana masuk.</small>':'')+
   '<small style="color:'+(S.placedDl==='fail'?'var(--bad)':'var(--muted)')+'">'+(S.placedDl==='ok'?'Struk sudah diunduh ke HP kamu.':S.placedDl==='fail'?'Struk belum terunduh. Tekan Unduh struk.':'Menyiapkan struk…')+'</small>'+
   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%"><button class="btn2" data-act="dlplaced" style="justify-content:center">Unduh struk</button><button class="btn" data-act="closeplaced">Lihat antrian</button></div></div></div>'}
 
@@ -546,6 +568,7 @@ document.addEventListener('change',e=>{const t=e.target,b=t.dataset&&t.dataset.b
 document.addEventListener('click',async e=>{
   const t=e.target.closest('button,a');if(!t)return;const d=t.dataset;
   if(d.go){e.preventDefault();go(d.go);window.scrollTo({top:0});return}
+  if(d.qrisfor){S.qrisFor=d.qrisfor;render();return}
   if(d.receipt){const o=findOrder(d.receipt);if(o)downloadReceipt(o).then(()=>toast('Struk diunduh')).catch(e=>toast(e.message||'Struk gagal diunduh'));return}
   if(d.layout){S.layout=d.layout;ls.set('layout',S.layout);toast('Tampilan: '+({auto:'Otomatis',mobile:'HP',desktop:'Desktop'})[S.layout]);render();window.scrollTo({top:0});return}
   if(d.ndismiss){S.alerts=S.alerts.filter(x=>x.id!==d.ndismiss);render();return}
@@ -568,6 +591,8 @@ document.addEventListener('click',async e=>{
   if(d.lunas){await run(api('POST','/api/admin/kasbon/settle',{name:d.lunas},true),'Kasbon '+d.lunas+' lunas').catch(()=>{});loadAdmin();return}
   if(d.copy){const os=unpaidKasbon().filter(o=>o.customerName===d.copy);copyText('Halo '+d.copy+', tagihan KAmart kamu '+rp(sum(os,o=>+o.total||0))+' ('+os.length+' transaksi). Mohon dibayar saat gajian ya. Terima kasih!');return}
   const act=d.act;if(!act)return;
+  if(act==='qristoggle'){S.qrisStatic=!S.qrisStatic;render();return}
+  if(act==='qrisclose'){S.qrisFor=null;render();return}
   if(act==='install'){doInstall();return}
   if(act==='installhide'){ls.set('installHide',1);render();return}
   if(act==='dlplaced'&&S.placed){autoReceipt();return}
@@ -608,7 +633,7 @@ async function shrink(file){
 }
 document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='p-img'||!t.files||!t.files[0]||!S.pf)return;
   try{S.pf.img=await shrink(t.files[0]);render()}catch(err){toast('Foto tidak bisa dibaca. Coba file JPG atau PNG.')}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed)){S.receipt=null;S.placed=null;render()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor)){S.receipt=null;S.placed=null;S.qrisFor=null;render()}});
 
 function orderBody(lines,extra){const total=sum(lines,l=>l.qty*l.price);return Object.assign({createdAt:new Date().toISOString(),items:lines,total,modalTotal:sum(lines,l=>l.qty*l.modal)},extra)}
 async function placeOrder(){

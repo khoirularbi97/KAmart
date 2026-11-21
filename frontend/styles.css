@@ -157,6 +157,14 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .force-desktop .top h1{font-size:26px}
 .force-desktop .shop{grid-template-columns:minmax(0,1fr) 340px}
 .force-desktop .sticky{position:sticky}
+/* QRIS */
+.qris{display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:2px solid var(--primary-soft);border-radius:20px;padding:14px;text-align:center;width:100%}
+.qhead{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.qhead b{background:#2B2140;color:#fff;border-radius:6px;padding:2px 8px;letter-spacing:.08em;font-size:11px}
+.qcode{width:min(240px,100%);background:#fff}
+.qcode svg{width:100%;height:auto;display:block}
+.qimg{width:min(240px,100%);border-radius:12px}
+.qamt{font-size:22px;font-weight:800;color:var(--primary-ink)}
 /* Notifikasi pesanan masuk (admin) */
 .notif{position:fixed;top:calc(16px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));z-index:55;display:flex;flex-direction:column;gap:10px;width:min(350px,calc(100% - 32px))}
 .ncard{background:#fff;border-radius:20px;padding:14px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 18px 40px rgba(43,33,64,.25);border:2px solid var(--primary-soft)}
