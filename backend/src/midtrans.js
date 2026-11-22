@@ -25,7 +25,12 @@ async function call(method, path, body) {
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
     const r = await fetch(BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal });
-    const j = await r.json().catch(() => ({}));
+    const text = await r.text();
+    let j = {};
+    try { j = JSON.parse(text); } catch (e) { /* bukan JSON */ }
+    if (!j || typeof j !== 'object') j = {};
+    j._http = r.status;
+    j._raw = text.slice(0, 300);
     return j;
   } finally {
     clearTimeout(t);
@@ -41,7 +46,8 @@ async function chargeQris(mtOrderId, amount) {
     custom_expiry: { expiry_duration: EXPIRY_MIN, unit: 'minute' },
   });
   if (String(j.status_code) !== '201' || !j.qr_string) {
-    throw new MidtransError((j.status_message || 'Midtrans menolak transaksi') + ' (' + (j.status_code || '?') + ')');
+    const detail = j.status_message || (j.validation_messages || []).join('; ') || j._raw || 'tanpa isi';
+    throw new MidtransError('HTTP ' + j._http + ', status ' + (j.status_code || '?') + ': ' + detail);
   }
   const exp = j.expiry_time ? new Date(j.expiry_time.replace(' ', 'T') + '+07:00') : new Date(Date.now() + EXPIRY_MIN * 60000);
   const act = (j.actions || []).find((x) => x.name === 'generate-qr-code');
