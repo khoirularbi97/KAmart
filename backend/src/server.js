@@ -291,7 +291,7 @@ app.post('/api/orders/:id/qris', ah(async (req, res) => {
      ORDER BY created_at DESC LIMIT 1`, [o.id, o.total]);
   if (cur.rowCount) {
     const p = cur.rows[0];
-    return res.json({ qr: p.qr_string, expiresAt: p.expires_at, amount: p.amount, mode: midtrans.mode });
+    return res.json({ qr: p.qr_string, expiresAt: p.expires_at, amount: p.amount, mode: midtrans.mode, testUrl: midtrans.IS_PRODUCTION ? undefined : p.qr_url });
   }
   const n = await db.query('SELECT count(*)::int AS n FROM payments WHERE order_id = $1', [o.id]);
   if (n.rows[0].n >= 20) throw bad('Terlalu banyak QR dibuat untuk pesanan ini. Hubungi penjual.');
@@ -303,9 +303,10 @@ app.post('/api/orders/:id/qris', ah(async (req, res) => {
     console.error('Midtrans charge gagal:', e.message);
     return res.status(502).json({ error: 'QRIS otomatis sedang bermasalah.', fallback: true });
   }
-  await db.query('INSERT INTO payments (mt_order_id, order_id, amount, qr_string, expires_at) VALUES ($1,$2,$3,$4,$5)',
-    [mtId, o.id, o.total, ch.qr, ch.expiresAt]);
-  res.json({ qr: ch.qr, expiresAt: ch.expiresAt, amount: o.total, mode: midtrans.mode });
+  await db.query('INSERT INTO payments (mt_order_id, order_id, amount, qr_string, qr_url, expires_at) VALUES ($1,$2,$3,$4,$5,$6)',
+    [mtId, o.id, o.total, ch.qr, ch.qrUrl, ch.expiresAt]);
+  // URL gambar QR hanya dikirim di sandbox, untuk ditempel di simulator Midtrans.
+  res.json({ qr: ch.qr, expiresAt: ch.expiresAt, amount: o.total, mode: midtrans.mode, testUrl: midtrans.IS_PRODUCTION ? undefined : ch.qrUrl });
 }));
 
 /* Webhook Midtrans: Settings > Payment > Notification URL = https://api-kamart.scurebot.site/api/payment/midtrans */

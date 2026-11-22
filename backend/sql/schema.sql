@@ -86,3 +86,4 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS payments_order ON payments (order_id, created_at DESC);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS qr_url TEXT NOT NULL DEFAULT '';

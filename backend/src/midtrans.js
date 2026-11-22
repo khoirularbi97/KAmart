@@ -44,7 +44,8 @@ async function chargeQris(mtOrderId, amount) {
     throw new MidtransError((j.status_message || 'Midtrans menolak transaksi') + ' (' + (j.status_code || '?') + ')');
   }
   const exp = j.expiry_time ? new Date(j.expiry_time.replace(' ', 'T') + '+07:00') : new Date(Date.now() + EXPIRY_MIN * 60000);
-  return { qr: j.qr_string, expiresAt: exp, raw: j };
+  const act = (j.actions || []).find((x) => x.name === 'generate-qr-code');
+  return { qr: j.qr_string, qrUrl: act ? act.url : '', expiresAt: exp, raw: j };
 }
 
 async function getStatus(mtOrderId) {

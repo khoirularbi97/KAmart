@@ -562,7 +562,7 @@ S.mt={};
 function paidNow(o){if(!o)return false;const m=S.mine.find(x=>x.id===o.id);return !!(o.paid||(m&&m.paid)||(S.mt[o.id]&&S.mt[o.id].st==='paid'))}
 async function mtLoad(id){
   try{const r=await api('POST','/api/orders/'+encodeURIComponent(id)+'/qris',{tokens:ls.get('orders',[])});
-    S.mt[id]=r.paid?{st:'paid'}:{st:'ok',qr:r.qr,exp:r.expiresAt,amount:r.amount,mode:r.mode};if(r.paid)loadMine()}
+    S.mt[id]=r.paid?{st:'paid'}:{st:'ok',qr:r.qr,exp:r.expiresAt,amount:r.amount,mode:r.mode,test:r.testUrl||''};if(r.paid)loadMine()}
   catch(e){S.mt[id]={st:'off'}}
   render()}
 function qrisPay(o){
@@ -573,8 +573,11 @@ function qrisPay(o){
   if(svg){const d=new Date(c.exp),hm=String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0');
     return '<div class="qris"><div class="qhead"><b>QRIS</b><span>KAmart</span></div><div class="qcode" role="img" aria-label="QRIS '+rp(c.amount)+'">'+svg+'</div><div class="qamt num">'+rp(c.amount)+'</div>'+
       '<small style="font-size:12px">Scan pakai DANA, GoPay, OVO, ShopeePay, atau m-banking. Pesanan <b>otomatis lunas</b> setelah dibayar.</small>'+
-      '<small style="color:var(--muted);font-size:11px">Berlaku sampai pukul '+hm+(c.mode==='midtrans-sandbox'?' · MODE UJI (sandbox), jangan dibayar sungguhan':'')+'</small></div>'}
+      '<small style="color:var(--muted);font-size:11px">Berlaku sampai pukul '+hm+(c.mode==='midtrans-sandbox'?' · MODE UJI (sandbox), jangan dibayar sungguhan':'')+'</small>'+
+      (c.test?'<div class="banner b-gold" style="font-size:12px;text-align:left;color:var(--warn)"><b>Tes sandbox:</b> salin alamat QR, buka simulator, tempel, lalu bayar.<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><button type="button" class="btn2" data-act="mtcopy" data-url="'+esc(c.test)+'" style="height:34px">Salin alamat QR</button><a class="btn2" href="https://simulator.sandbox.midtrans.com/v2/qris/index" target="_blank" rel="noopener" style="height:34px">Buka simulator</a></div></div>':'')+'</div>'}
   return qrisBlock(o.total)+'<small style="color:var(--muted)">Penjual menandai lunas setelah dana masuk.</small>'}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-act="mtcopy"]');if(!b)return;
+  try{await navigator.clipboard.writeText(b.dataset.url);toast('Alamat QR disalin')}catch(err){prompt('Salin alamat QR ini:',b.dataset.url)}});
 setInterval(()=>{if(document.hidden)return;const id=(S.placed&&S.placed.id)||S.qrisFor,c=id&&S.mt[id];
   if(c&&c.st==='ok'&&!paidNow(findOrder(id)||S.placed))loadMine()},4000);
 
