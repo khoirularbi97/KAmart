@@ -7,6 +7,7 @@ const db = require('./db');
 const { migrate, seedIfEmpty } = require('./migrate');
 const storage = require('./storage');
 const midtrans = require('./midtrans');
+const master = require('./master');
 
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -31,9 +32,6 @@ if (PUSH_ON) webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE)
 else console.log('Web Push nonaktif: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY belum diisi.');
 
 const STAGES_MAX = 3;
-const PAYS = ['QRIS', 'Tunai', 'Kasbon'];
-const SLOTS = ['Pagi 09.30', 'Istirahat 12.00', 'Istirahat 18.00', 'Pulang shift 1', 'Pulang shift 2'];
-const CATS = ['Makanan', 'Minuman', 'Rokok', 'Sembako', 'Lainnya'];
 
 /* ---------- helpers ---------- */
 class HttpError extends Error {
@@ -127,7 +125,7 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
     if (!kode || !Number.isInteger(qty) || qty < 1 || qty > 100) throw bad('Jumlah barang tidak valid.');
     qtyByKode.set(kode, (qtyByKode.get(kode) || 0) + qty);
   }
-  if (!PAYS.includes(pay)) throw bad('Metode bayar tidak dikenal.');
+  if (!master.payFor(pay, source)) throw bad('Metode bayar tidak tersedia.');
 
   const client = await db.pool.connect();
   try {
@@ -140,7 +138,7 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
     const lines = [];
     for (const [kode, qty] of qtyByKode) {
       const p = byKode.get(kode);
-      if (!p || (!allowHidden && !p.online)) throw bad('Produk ' + kode + ' tidak tersedia.');
+      if (!p || (!allowHidden && (!p.online || !master.catOnline(p.cat)))) throw bad('Produk ' + kode + ' tidak tersedia.');
       if (Number(p.stock) < qty) throw bad('Stok ' + p.name + ' tinggal ' + Math.max(0, Number(p.stock)) + '.');
       lines.push({ kode, name: p.name, qty, price: p.jual, modal: p.modal });
     }
@@ -212,7 +210,12 @@ app.get('/api/images/:kode', ah(async (req, res) => {
 /* Publik: katalog toko */
 app.get('/api/products', ah(async (req, res) => {
   const { rows } = await db.query(PRODUCTS_SQL + ' WHERE p.online ORDER BY p.kode');
-  res.json({ products: rows.map(mapPublicProduct) });
+  res.json({ products: rows.filter((r) => master.catOnline(r.cat)).map(mapPublicProduct), master: master.get() });
+}));
+
+/* Publik: data master (kategori, metode bayar, waktu ambil, info toko) */
+app.get('/api/master', ah(async (req, res) => {
+  res.json({ master: master.get() });
 }));
 
 /* Publik: apakah nama ini pelanggan terdaftar (boleh bayar pas gajian) */
@@ -227,7 +230,7 @@ app.post('/api/orders', ah(async (req, res) => {
   const b = req.body || {};
   const customerName = str(b.customerName, 60);
   if (!customerName) throw bad('Isi nama dulu.');
-  const slot = SLOTS.includes(b.slot) ? b.slot : SLOTS[1];
+  const slot = master.slots().includes(b.slot) ? b.slot : master.defaultSlot();
   const { row, token } = await createOrder({
     items: b.items, source: 'online', customerName, customerLine: str(b.customerLine, 60),
     pay: b.pay, slot, note: str(b.note, 140), allowHidden: false,
@@ -385,7 +388,40 @@ admin.get('/data', ah(async (req, res) => {
     customers: c.rows.map(mapCustomer),
     orders: o.rows.map(mapOrder),
     stockin: s.rows.map(mapStock),
+    master: master.get(),
   });
+}));
+
+/* Simpan data master. renames: [{dari, ke}] untuk kategori yang diganti nama (produk ikut dipindah). */
+admin.put('/master', ah(async (req, res) => {
+  let next;
+  try { next = master.sanitize(req.body && req.body.master); } catch (e) { throw bad(e.message); }
+  const names = new Set(next.kategori.map((k) => k.nama));
+  const renames = (Array.isArray(req.body && req.body.renames) ? req.body.renames : [])
+    .map((x) => ({ dari: str(x && x.dari, 30), ke: str(x && x.ke, 30) }))
+    .filter((x) => x.dari && x.ke && x.dari !== x.ke && names.has(x.ke));
+  const client = await db.pool.connect();
+  let moved = 0;
+  try {
+    await client.query('BEGIN');
+    for (const x of renames) {
+      const u = await client.query('UPDATE products SET cat = $2 WHERE cat = $1', [x.dari, x.ke]);
+      moved += u.rowCount;
+    }
+    const used = await client.query('SELECT cat, count(*)::int AS n FROM products WHERE NOT (cat = ANY($1)) GROUP BY cat', [[...names]]);
+    if (used.rowCount) {
+      const u = used.rows[0];
+      throw bad('Kategori "' + u.cat + '" masih dipakai ' + u.n + ' produk. Pindahkan produknya dulu.');
+    }
+    await master.save(client, next);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.json({ master: next, moved });
 }));
 
 admin.put('/products/:kode', ah(async (req, res) => {
@@ -393,10 +429,11 @@ admin.put('/products/:kode', ah(async (req, res) => {
   const b = req.body || {};
   const name = str(b.name, 80);
   if (!kode || !name) throw bad('Kode dan nama wajib diisi.');
-  const cat = CATS.includes(b.cat) ? b.cat : 'Lainnya';
+  const cats = master.catNames();
+  const cat = cats.includes(b.cat) ? b.cat : (cats.includes('Lainnya') ? 'Lainnya' : cats[0]);
   const modal = int(b.modal); const jual = int(b.jual); const min = int(b.min || 0);
   if (![modal, jual, min].every((n) => Number.isInteger(n) && n >= 0)) throw bad('Harga dan stok minimum harus angka 0 atau lebih.');
-  const online = cat === 'Rokok' ? false : !!b.online;
+  const online = master.catOnline(cat) ? !!b.online : false;
   const cur = await db.query('SELECT img FROM products WHERE kode = $1', [kode]);
   if (b.isNew && cur.rowCount) throw new HttpError(409, 'Kode ' + kode + ' sudah dipakai.');
   const oldImg = cur.rowCount ? cur.rows[0].img : '';
@@ -529,6 +566,7 @@ app.use((err, req, res, next) => {
 (async () => {
   try {
     await migrate(db);
+    await master.load(db);
     if (AUTO_SEED && (await seedIfEmpty(db))) console.log('Data awal KAmart dimasukkan.');
     console.log('Pembayaran QRIS: ' + midtrans.mode);
     console.log('Penyimpanan foto: ' + (storage.ENABLED ? 'Neon Object Storage (bucket ' + storage.BUCKET + ')' : 'database (bucket belum diatur)'));

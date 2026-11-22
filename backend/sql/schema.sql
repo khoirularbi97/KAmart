@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS orders (
   items         JSONB NOT NULL,
   total         INTEGER NOT NULL,
   modal_total   INTEGER NOT NULL,
-  pay           TEXT NOT NULL CHECK (pay IN ('QRIS', 'Tunai', 'Kasbon')),
+  pay           TEXT NOT NULL,
   paid          BOOLEAN NOT NULL DEFAULT FALSE,
   paid_at       TIMESTAMPTZ,
   stage         INTEGER NOT NULL DEFAULT 0 CHECK (stage BETWEEN -1 AND 3),
@@ -87,3 +87,12 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 CREATE INDEX IF NOT EXISTS payments_order ON payments (order_id, created_at DESC);
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS qr_url TEXT NOT NULL DEFAULT '';
+
+-- Pengaturan / data master (kategori, metode bayar, waktu ambil, dll.) dalam bentuk JSON.
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Metode bayar kini diatur lewat Kelola Master, jadi batasan lama dilepas.
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_pay_check;

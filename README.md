@@ -152,6 +152,16 @@ Tanpa pengaturan apa pun, foto disimpan di tabel `product_images` (database). Ag
 Foto yang sudah ada otomatis dipindahkan saat API dijalankan ulang. Foto lama terhapus dari bucket saat diganti atau dihapus.
 Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `NEON_BUCKET_PUBLIC_URL`.
 
+## Kelola Master
+
+Menu admin **Kelola Master** untuk mengatur tanpa mengubah kode:
+- **Kategori**: nama, warna, ikon, urutan, dan "Jual online" (matikan untuk kategori khusus kasir seperti rokok). Ganti nama kategori otomatis memindahkan produknya; kategori yang masih dipakai produk tidak bisa dihapus.
+- **Pembayaran**: QRIS, Tunai, dan Bayar pas gajian (bawaan, bisa diganti nama/dinonaktifkan) serta metode tambahan seperti Transfer BCA, lengkap dengan keterangan untuk pembeli dan pilihan tampil di toko online/kasir.
+- **Waktu ambil**: tambah, ubah, urutkan, nonaktifkan, dan pilih waktu bawaan.
+- **Satuan, bagian/line, dan info toko** (lokasi ambil, batas waktu order).
+
+Data disimpan di tabel `settings` dan dibuat otomatis saat API dijalankan ulang.
+
 ## QRIS otomatis lunas (Midtrans)
 
 Tanpa pengaturan, pembeli melihat QRIS DANA statis dan admin menandai lunas manual. Jika `MIDTRANS_SERVER_KEY` diisi:
@@ -217,6 +227,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | POST | `/api/orders/lookup` | publik | Status pesanan milik HP pembeli (pakai token) |
 | POST | `/api/orders/:id/qris` | publik (token pesanan) | QRIS Midtrans untuk pesanan |
 | POST | `/api/payment/midtrans` | Midtrans (signature) | Webhook pembayaran |
+| GET | `/api/master` | publik | Data master (kategori, metode bayar, waktu ambil, info toko) |
+| PUT | `/api/admin/master` | admin | Simpan data master (`renames` memindahkan produk saat kategori diganti nama) |
 | POST | `/api/auth/login` | publik | Login admin, mengembalikan token (berlaku 7 hari) |
 | GET | `/api/admin/data` | admin | Semua produk, pelanggan, pesanan, stok masuk |
 | PUT | `/api/admin/products/:kode` | admin | Tambah/ubah produk (termasuk foto) |
