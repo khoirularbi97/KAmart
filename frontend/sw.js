@@ -1,6 +1,6 @@
 /* Service worker KAmart.
  * Naikkan VERSION setiap rilis supaya HP pembeli mengambil file terbaru. */
-const VERSION = 'kamart-v9';
+const VERSION = 'kamart-v10';
 const SHELL = [
   '/',
   '/styles.css',
@@ -80,6 +80,9 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { title: 'KAmart', body: event.data ? event.data.text() : '' }; }
+  // Beri tahu aplikasi yang sedang terbuka supaya memuat ulang data (pengganti refresh berkala).
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((list) => list.forEach((c) => c.postMessage({ type: 'kamart-push' })));
   event.waitUntil(self.registration.showNotification(d.title || 'KAmart', {
     body: d.body || '',
     icon: '/icons/icon-192.png',

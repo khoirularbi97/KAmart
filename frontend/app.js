@@ -118,14 +118,14 @@ function renderShell(){
   document.getElementById('side').innerHTML=
     '<div class="who"><img src="logo.png" alt="" width="88" height="88" style="border-radius:50%;border:3px solid rgba(255,255,255,.7);box-shadow:0 12px 26px rgba(0,0,0,.25)"><strong style="font-size:16px">Hi, Arbi!</strong><span style="font-size:12px;color:#E6DEFF">Admin KAmart</span></div>'+
     groups.map(g=>'<nav class="navg" aria-label="'+g+'"><small>'+g+'</small>'+VIEWS.filter(v=>v.g===g&&(g==='Admin'||v.id==='toko')).map(v=>{const b=badgeFor(v.id);return '<button class="nv'+(S.view===v.id?' on':'')+'" data-go="'+v.id+'"'+(S.view===v.id?' aria-current="page"':'')+'><span>'+ic(v.ic,18)+v.t+'</span>'+(b?'<em class="bdg">'+b+'</em>':'')+'</button>'}).join('')+'</nav>').join('')+
-    '<div class="sidenote"><strong>Tersambung ke server</strong><br>Pesanan baru dicek tiap 10 detik.</div>'+
+    '<div class="sidenote"><strong>Tersambung ke server</strong><br>Data diperbarui saat ada pesanan baru, saat aplikasi dibuka, atau lewat tombol ↻.</div>'+
     '<button class="nv" data-act="logout" style="justify-content:center;background:rgba(255,255,255,.14)">Keluar</button>';
   const v=VIEWS.find(x=>x.id===S.view);
   document.getElementById('mbar').innerHTML='<span style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="" width="34" height="34" style="border-radius:50%"><b>KAmart</b></span><span style="font-size:12px;color:#EDE7FF">'+v.g+' · '+v.t+'</span>';
   const nNew=valid().filter(o=>o.stage===0).length;
   const subs={master:'Kategori, pembayaran, waktu ambil, dan lainnya',tentang:'Tentang KAmart',syarat:'Aturan berbelanja',refund:'Pembatalan dan pengembalian dana',privasi:'Perlindungan data pembeli',toko:'Pesan sekarang, ambil saat istirahat',dashboard:salam()+', Arbi',pesanan:'Alur pesanan dari Baru sampai Selesai',kasir:'Transaksi langsung di tempat',produk:'Harga, margin, dan sisa stok',stok:'Catat belanja dari grosir',kasbon:'Kasbon dan pesanan yang belum dibayar',rekap:'Ringkasan per bulan'};
   document.getElementById('top').innerHTML='<div><h1>'+v.t+'</h1><div class="sub">'+subs[v.id]+'</div></div>'+
-    '<div class="tbtns">'+(v.g==='Admin'?layoutSwitch():'')+(v.g==='Admin'?'<button class="cbtn'+(unseenOrders().length?' ring-on':'')+'" data-go="pesanan" aria-label="Pesanan baru: '+nNew+'">'+ic('bell')+(nNew?'<em>'+nNew+'</em>':'')+'</button>':'')+
+    '<div class="tbtns">'+(v.g==='Admin'?layoutSwitch()+'<button class="btn2" data-act="refresh" aria-label="Muat ulang data"'+(S.refreshing?' disabled':'')+'>'+(S.refreshing?'Memuat…':'↻ Muat ulang')+'</button>':'')+(v.g==='Admin'?'<button class="cbtn'+(unseenOrders().length?' ring-on':'')+'" data-go="pesanan" aria-label="Pesanan baru: '+nNew+'">'+ic('bell')+(nNew?'<em>'+nNew+'</em>':'')+'</button>':'')+
     '<button class="btn2" data-go="'+(v.g==='Admin'?'toko':'dashboard')+'">'+(v.g==='Admin'?'Lihat toko':'Masuk admin')+'</button>'+(v.g==='Admin'?'<button class="btn2" data-act="logout">Keluar</button>':'')+'</div>';
   const pillIds=v.g==='Admin'?['dashboard','pesanan','kasir','produk','stok','kasbon','rekap','master']:['toko'];
   document.getElementById('pill').innerHTML='<div class="track">'+pillIds.map(id=>{const x=VIEWS.find(y=>y.id===id),b=badgeFor(id);return '<button class="pb'+(S.view===id?' on':'')+'" data-go="'+id+'">'+x.t+(b?'<em>'+b+'</em>':'')+'</button>'}).join('')+
@@ -285,7 +285,7 @@ function queueOrders(){return S.queue.slice()}
 function isMine(o){return S.mine.some(m=>m.id===o.id)}
 function findOrder(id){return S.mine.find(o=>o.id===id)||S.orders.find(o=>o.id===id)}
 function vPesananku(){
-  let h=shopHead('Antrian Pesanan','Pesanan yang sedang diproses');
+  let h=shopHead('Antrian Pesanan','Pesanan yang sedang diproses','<button class="btn3" data-act="refresh"'+(S.refreshing?' disabled':'')+'>'+(S.refreshing?'Memuat…':'↻ Perbarui')+'</button>');
   if(loading())return h+'<div class="card empty">Memuat antrian…</div>';
   const q=queueOrders();
   h+='<div class="stack" style="gap:12px"><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'+[0,1,2].map(i=>'<div class="stat '+['b-lav','b-pink','b-gold'][i]+'" style="padding:10px 12px;gap:0"><span class="vl num" style="font-size:20px">'+q.filter(o=>o.stage===i).length+'</span><span class="sm" style="font-size:11px">'+STAGES[i]+'</span></div>').join('')+'</div>';
@@ -890,7 +890,12 @@ async function exportCsv(){
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
 function tick(){if(isShopView()){if(document.hidden)return;loadPublic();loadMine();loadQueue()}else if(S.token)loadAdmin()}
 window.addEventListener('hashchange',()=>{readHash();S.confirm=null;render();tick()});
-document.addEventListener('visibilitychange',tick);
+// Tidak ada refresh berkala. Data dimuat ulang saat: pindah halaman, aplikasi dibuka lagi,
+// notifikasi push pesanan masuk (admin), atau tombol ↻ ditekan.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!S.imgBusy)tick()});
+if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='kamart-push')tick()});
+async function manualRefresh(){if(S.refreshing)return;S.refreshing=true;render();
+  try{if(isShopView())await Promise.all([loadPublic(),loadMine(),loadQueue()]);else if(S.token)await loadAdmin()}finally{S.refreshing=false;render()}}
+document.addEventListener('click',e=>{if(e.target.closest('[data-act="refresh"]'))manualRefresh()});
 readHash();render();tick();if(S.co.name)checkReg();
-setInterval(tick,10000);
 })();
