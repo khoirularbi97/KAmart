@@ -555,7 +555,28 @@ function qrisBlock(amount){
    '<small style="color:var(--muted);font-size:11px">NMID '+QRIS_NMID+'</small>'+
    '<button type="button" class="linkbtn" data-act="qristoggle" style="font-size:12px">'+(S.qrisStatic?'Pakai QRIS dengan nominal otomatis':'Nominal tidak muncul? Pakai QRIS biasa')+'</button></div>'}
 function qrisModalHtml(){const o=findOrder(S.qrisFor);if(!o)return '';
-  return '<div class="modal" role="dialog" aria-modal="true" aria-label="Bayar dengan QRIS"><div class="box" style="align-items:center;text-align:center"><b style="font-size:17px">Bayar pesanan '+esc(o.code||'')+'</b>'+qrisBlock(o.total)+'<small style="color:var(--muted)">Pesanan ditandai lunas oleh penjual setelah dana masuk.</small><button class="btn" data-act="qrisclose" style="width:100%">Tutup</button></div></div>'}
+  return '<div class="modal" role="dialog" aria-modal="true" aria-label="Bayar dengan QRIS"><div class="box" style="align-items:center;text-align:center"><b style="font-size:17px">Bayar pesanan '+esc(o.code||'')+'</b>'+qrisPay(o)+'<button class="btn" data-act="qrisclose" style="width:100%">Tutup</button></div></div>'}
+
+/* ---------- QRIS Midtrans: lunas otomatis ---------- */
+S.mt={};
+function paidNow(o){if(!o)return false;const m=S.mine.find(x=>x.id===o.id);return !!(o.paid||(m&&m.paid)||(S.mt[o.id]&&S.mt[o.id].st==='paid'))}
+async function mtLoad(id){
+  try{const r=await api('POST','/api/orders/'+encodeURIComponent(id)+'/qris',{tokens:ls.get('orders',[])});
+    S.mt[id]=r.paid?{st:'paid'}:{st:'ok',qr:r.qr,exp:r.expiresAt,amount:r.amount,mode:r.mode};if(r.paid)loadMine()}
+  catch(e){S.mt[id]={st:'off'}}
+  render()}
+function qrisPay(o){
+  if(paidNow(o))return '<div class="banner b-blue" style="width:100%;display:flex;gap:8px;align-items:center;justify-content:center">'+ic('check',18,2.6)+'<b>Pembayaran QRIS diterima. Pesanan lunas.</b></div>';
+  const c=S.mt[o.id],wait='<div class="qris"><div class="qhead"><b>QRIS</b><span>KAmart</span></div><small style="padding:40px 0">Menyiapkan QRIS…</small></div>';
+  if(!c||c.st==='load'||(c.st==='ok'&&new Date(c.exp)<=Date.now())){if(!c||c.st!=='load'){S.mt[o.id]={st:'load'};setTimeout(()=>mtLoad(o.id),0)}return wait}
+  const svg=c.st==='ok'?qrisSvg(c.qr):'';
+  if(svg){const d=new Date(c.exp),hm=String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0');
+    return '<div class="qris"><div class="qhead"><b>QRIS</b><span>KAmart</span></div><div class="qcode" role="img" aria-label="QRIS '+rp(c.amount)+'">'+svg+'</div><div class="qamt num">'+rp(c.amount)+'</div>'+
+      '<small style="font-size:12px">Scan pakai DANA, GoPay, OVO, ShopeePay, atau m-banking. Pesanan <b>otomatis lunas</b> setelah dibayar.</small>'+
+      '<small style="color:var(--muted);font-size:11px">Berlaku sampai pukul '+hm+(c.mode==='midtrans-sandbox'?' · MODE UJI (sandbox), jangan dibayar sungguhan':'')+'</small></div>'}
+  return qrisBlock(o.total)+'<small style="color:var(--muted)">Penjual menandai lunas setelah dana masuk.</small>'}
+setInterval(()=>{if(document.hidden)return;const id=(S.placed&&S.placed.id)||S.qrisFor,c=id&&S.mt[id];
+  if(c&&c.st==='ok'&&!paidNow(findOrder(id)||S.placed))loadMine()},4000);
 
 /* ---------- struk pesanan (PNG) ---------- */
 let LOGO=null;
@@ -594,7 +615,7 @@ function placedHtml(){const o=S.placed;
   return '<div class="modal" role="dialog" aria-modal="true" aria-label="Pesanan terkirim"><div class="box" style="align-items:center;text-align:center"><span class="tile t-lav" style="border-radius:50%;width:56px;height:56px">'+ic('check',26,2.6)+'</span><b style="font-size:18px">Pesanan terkirim!</b><span style="color:var(--muted);font-size:13px">Tunjukkan kode ini saat mengambil pesanan</span>'+
   '<div class="num" style="font-size:30px;font-weight:800;letter-spacing:.06em;color:var(--primary-ink);background:var(--primary-soft);border-radius:16px;padding:10px 22px">'+esc(o.code)+'</div>'+
   '<div style="font-size:13px">'+esc(itemsText(o))+'<br><b class="num">'+rp(o.total)+'</b> · '+esc(o.slot||'')+'</div>'+
-  (o.pay==='QRIS'&&!o.paid?qrisBlock(o.total)+'<small style="color:var(--muted)">Bayar sekarang atau saat ambil. Penjual menandai lunas setelah dana masuk.</small>':'')+
+  (o.pay==='QRIS'&&!o.paid?qrisPay(o):'')+
   '<small style="color:'+(S.placedDl==='fail'?'var(--bad)':'var(--muted)')+'">'+(S.placedDl==='ok'?'Struk sudah diunduh ke HP kamu.':S.placedDl==='fail'?'Struk belum terunduh. Tekan Unduh struk.':'Menyiapkan struk…')+'</small>'+
   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%"><button class="btn2" data-act="dlplaced" style="justify-content:center">Unduh struk</button><button class="btn" data-act="closeplaced">Lihat antrian</button></div></div></div>'}
 

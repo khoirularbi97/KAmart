@@ -73,3 +73,16 @@ CREATE TABLE IF NOT EXISTS product_images (
   data        BYTEA NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Transaksi QRIS Midtrans per pesanan (satu pesanan bisa punya beberapa QR jika yang lama kedaluwarsa).
+CREATE TABLE IF NOT EXISTS payments (
+  mt_order_id TEXT PRIMARY KEY,
+  order_id    TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  amount      INTEGER NOT NULL,
+  qr_string   TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS payments_order ON payments (order_id, created_at DESC);

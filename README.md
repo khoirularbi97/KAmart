@@ -152,6 +152,26 @@ Tanpa pengaturan apa pun, foto disimpan di tabel `product_images` (database). Ag
 Foto yang sudah ada otomatis dipindahkan saat API dijalankan ulang. Foto lama terhapus dari bucket saat diganti atau dihapus.
 Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `NEON_BUCKET_PUBLIC_URL`.
 
+## QRIS otomatis lunas (Midtrans)
+
+Tanpa pengaturan, pembeli melihat QRIS DANA statis dan admin menandai lunas manual. Jika `MIDTRANS_SERVER_KEY` diisi:
+- setiap pesanan QRIS mendapat QR sendiri dari Midtrans (berlaku 30 menit, dibuat ulang otomatis jika kedaluwarsa);
+- setelah dibayar, Midtrans memanggil `POST /api/payment/midtrans`; server memeriksa `signature_key`, mengecek ulang status ke Midtrans, lalu menandai pesanan **Lunas** dan mengirim notifikasi ke HP admin;
+- layar pembeli berubah menjadi "Pembayaran QRIS diterima" tanpa perlu dimuat ulang;
+- Kasir tetap memakai QRIS DANA statis.
+
+Langkah di VPS:
+```bash
+cd ~/apps/kamart && git pull
+nano backend/.env
+#   MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx        (sandbox untuk uji; ganti key production setelah akun disetujui)
+#   MIDTRANS_NOTIFY_URL=https://api-kamart.scurebot.site/api/payment/midtrans
+pm2 restart kamart-api
+curl https://api-kamart.scurebot.site/api/health   # "bayar":"midtrans-sandbox" atau "midtrans-production"
+```
+Tabel `payments` dibuat otomatis saat API dijalankan ulang. Isi juga **Payment Notification URL** di dashboard Midtrans (Settings → Payment) dengan alamat yang sama.
+Uji sandbox: bayar QR lewat simulator QRIS sandbox Midtrans, jangan dengan aplikasi e-wallet sungguhan.
+
 ## Verifikasi Midtrans (aktivasi Production)
 
 Halaman yang biasanya dicek tim Midtrans sudah tersedia di situs (tautan ada di bawah halaman toko dan di tab Akun):
@@ -193,6 +213,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | GET | `/api/customers/check?name=` | publik | Cek pelanggan terdaftar (boleh kasbon) |
 | POST | `/api/orders` | publik | Buat pesanan online |
 | POST | `/api/orders/lookup` | publik | Status pesanan milik HP pembeli (pakai token) |
+| POST | `/api/orders/:id/qris` | publik (token pesanan) | QRIS Midtrans untuk pesanan |
+| POST | `/api/payment/midtrans` | Midtrans (signature) | Webhook pembayaran |
 | POST | `/api/auth/login` | publik | Login admin, mengembalikan token (berlaku 7 hari) |
 | GET | `/api/admin/data` | admin | Semua produk, pelanggan, pesanan, stok masuk |
 | PUT | `/api/admin/products/:kode` | admin | Tambah/ubah produk (termasuk foto) |

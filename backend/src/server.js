@@ -6,6 +6,7 @@ const webpush = require('web-push');
 const db = require('./db');
 const { migrate, seedIfEmpty } = require('./migrate');
 const storage = require('./storage');
+const midtrans = require('./midtrans');
 
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -196,7 +197,7 @@ app.use(cors({ origin: origins.length ? origins : true }));
 app.get('/', (req, res) => res.json({ name: 'KAmart API', ok: true }));
 app.get('/api/health', ah(async (req, res) => {
   await db.query('SELECT 1');
-  res.json({ ok: true, foto: storage.ENABLED ? 'neon-bucket:' + storage.BUCKET : 'database' });
+  res.json({ ok: true, foto: storage.ENABLED ? 'neon-bucket:' + storage.BUCKET : 'database', bayar: midtrans.mode });
 }));
 
 /* Foto produk cadangan (jika bucket Neon belum diatur) */
@@ -269,6 +270,67 @@ app.get('/api/orders/queue', ah(async (req, res) => {
       slot: r.slot,
     })),
   });
+}));
+
+/* ---------- Pembayaran QRIS Midtrans ---------- */
+const rp = (n) => 'Rp' + Number(n).toLocaleString('id-ID');
+
+/* Publik: QRIS dinamis untuk pesanan milik HP ini (dibuktikan dengan token pesanan). */
+app.post('/api/orders/:id/qris', ah(async (req, res) => {
+  if (!midtrans.ENABLED) return res.status(501).json({ error: 'QRIS otomatis belum aktif.', fallback: true });
+  const tokens = Array.isArray(req.body && req.body.tokens) ? req.body.tokens.filter((t) => typeof t === 'string').slice(0, 50) : [];
+  const { rows } = await db.query('SELECT * FROM orders WHERE id = $1 AND public_token = ANY($2)', [req.params.id, tokens]);
+  const o = rows[0];
+  if (!o) throw new HttpError(404, 'Pesanan tidak ditemukan.');
+  if (o.paid) return res.json({ paid: true });
+  if (o.stage < 0) throw bad('Pesanan sudah dibatalkan.');
+  if (o.pay !== 'QRIS') throw bad('Pesanan ini tidak memakai QRIS.');
+  // Pakai QR yang masih berlaku (minimal 2 menit lagi) supaya tidak membuat transaksi baru terus.
+  const cur = await db.query(
+    `SELECT * FROM payments WHERE order_id = $1 AND status = 'pending' AND amount = $2 AND expires_at > now() + interval '2 minutes'
+     ORDER BY created_at DESC LIMIT 1`, [o.id, o.total]);
+  if (cur.rowCount) {
+    const p = cur.rows[0];
+    return res.json({ qr: p.qr_string, expiresAt: p.expires_at, amount: p.amount, mode: midtrans.mode });
+  }
+  const n = await db.query('SELECT count(*)::int AS n FROM payments WHERE order_id = $1', [o.id]);
+  if (n.rows[0].n >= 20) throw bad('Terlalu banyak QR dibuat untuk pesanan ini. Hubungi penjual.');
+  const mtId = o.code + '-' + Date.now().toString(36).toUpperCase();
+  let ch;
+  try {
+    ch = await midtrans.chargeQris(mtId, o.total);
+  } catch (e) {
+    console.error('Midtrans charge gagal:', e.message);
+    return res.status(502).json({ error: 'QRIS otomatis sedang bermasalah.', fallback: true });
+  }
+  await db.query('INSERT INTO payments (mt_order_id, order_id, amount, qr_string, expires_at) VALUES ($1,$2,$3,$4,$5)',
+    [mtId, o.id, o.total, ch.qr, ch.expiresAt]);
+  res.json({ qr: ch.qr, expiresAt: ch.expiresAt, amount: o.total, mode: midtrans.mode });
+}));
+
+/* Webhook Midtrans: Settings > Payment > Notification URL = https://api-kamart.scurebot.site/api/payment/midtrans */
+app.post('/api/payment/midtrans', ah(async (req, res) => {
+  const n = req.body || {};
+  if (!midtrans.ENABLED) return res.status(503).json({ error: 'Midtrans belum diatur.' });
+  if (!midtrans.validSignature(n)) return res.status(403).json({ error: 'Signature tidak valid.' });
+  const pay = await db.query('SELECT * FROM payments WHERE mt_order_id = $1', [String(n.order_id)]);
+  if (!pay.rowCount) return res.json({ ok: true, note: 'order_id tidak dikenal' }); // mis. tes dari dashboard
+  // Pastikan langsung ke Midtrans, jangan hanya percaya isi notifikasi.
+  const st = await midtrans.getStatus(n.order_id);
+  const status = String(st.transaction_status || n.transaction_status || 'unknown').slice(0, 30);
+  await db.query('UPDATE payments SET status = $2, updated_at = now() WHERE mt_order_id = $1', [n.order_id, status]);
+  if (midtrans.isPaidStatus(st) && Math.round(Number(st.gross_amount)) === pay.rows[0].amount) {
+    const r = await db.query(
+      'UPDATE orders SET paid = TRUE, paid_at = now() WHERE id = $1 AND NOT paid RETURNING code, customer_name, total',
+      [pay.rows[0].order_id]);
+    if (r.rowCount) {
+      const o = r.rows[0];
+      console.log('QRIS lunas:', o.code, rp(o.total));
+      pushAdmins({ title: 'QRIS diterima · ' + o.code, body: o.customer_name + ' membayar ' + rp(o.total) + ' (lunas otomatis)', tag: 'pay-' + o.code, url: '/#pesanan' })
+        .catch((e) => console.error('Push gagal:', e.message));
+    }
+  }
+  res.json({ ok: true });
 }));
 
 /* Login admin */
@@ -467,6 +529,7 @@ app.use((err, req, res, next) => {
   try {
     await migrate(db);
     if (AUTO_SEED && (await seedIfEmpty(db))) console.log('Data awal KAmart dimasukkan.');
+    console.log('Pembayaran QRIS: ' + midtrans.mode);
     console.log('Penyimpanan foto: ' + (storage.ENABLED ? 'Neon Object Storage (bucket ' + storage.BUCKET + ')' : 'database (bucket belum diatur)'));
     // Pindahkan foto lama (data URL di kolom img) ke penyimpanan baru.
     const legacy = await db.query("SELECT kode, img FROM products WHERE img LIKE 'data:%'");

@@ -1,6 +1,6 @@
 /* Service worker KAmart.
  * Naikkan VERSION setiap rilis supaya HP pembeli mengambil file terbaru. */
-const VERSION = 'kamart-v6';
+const VERSION = 'kamart-v7';
 const SHELL = [
   '/',
   '/styles.css',
