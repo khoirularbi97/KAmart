@@ -164,7 +164,9 @@ Langkah di VPS:
 ```bash
 cd ~/apps/kamart && git pull
 nano backend/.env
-#   MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx        (sandbox untuk uji; ganti key production setelah akun disetujui)
+#   MIDTRANS_ENV=sandbox                          (ganti production setelah akun disetujui)
+#   MIDTRANS_SERVER_KEY=<nilai di tabel "Server Keys", mis. G123...-DEFAULT-PAYMENT...>
+#   MIDTRANS_SIGNATURE_KEY=<"Signature Secret Key", SB-Mid-server-...>
 #   MIDTRANS_NOTIFY_URL=https://api-kamart.scurebot.site/api/payment/midtrans
 pm2 restart kamart-api
 curl https://api-kamart.scurebot.site/api/health   # "bayar":"midtrans-sandbox" atau "midtrans-production"
