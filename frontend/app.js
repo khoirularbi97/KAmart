@@ -550,8 +550,8 @@ async function posterPng(list,fmt){
   g.globalAlpha=.16;g.fillStyle='#FFC7DC';g.beginPath();g.arc(W-40,sq?120:180,sq?220:320,0,7);g.fill();g.fillStyle='#BDEBD5';g.beginPath();g.arc(60,H-(sq?120:260),sq?240:360,0,7);g.fill();g.globalAlpha=1;
   const M=sq?56:80;let y=sq?52:100;const LS=sq?92:128;
   const lg=await logoImg();if(lg){g.save();g.beginPath();g.arc(M+LS/2,y+LS/2,LS/2,0,7);g.clip();g.drawImage(lg,M,y,LS,LS);g.restore()}
-  g.fillStyle='#fff';font('800',sq?54:70);g.fillText('KAmart',M+LS+26,y+LS/2+(sq?2:4));
-  g.fillStyle='#EDE7FF';font('500',sq?24:30);g.fillText('Toko kelontong online · ambil saat istirahat',M+LS+28,y+LS/2+(sq?38:50));
+  g.fillStyle='#fff';font('800',sq?50:66);g.fillText('KAmart',M+LS+26,y+(sq?44:58));
+  {const tw0=W-M-(M+LS+28);g.fillStyle='#EDE7FF';font('500',sq?22:28);g.fillText(fitText(g,'Toko kelontong online',tw0),M+LS+28,y+(sq?74:96));g.fillText(fitText(g,'Ambil saat istirahat, awal masuk, pulang kerja',tw0),M+LS+28,y+(sq?102:132))}
   y+=LS+(sq?30:60);
   g.fillStyle='#FFE27A';font('900',sq?96:150);g.fillText('PROMO',M,y+(sq?84:130));
   font('900',sq?96:150);const pw=g.measureText('PROMO').width,sub=list.length>1?list.length+' promo spesial':'spesial buat kamu';g.fillStyle='#fff';fit(sub,'700',sq?30:40,20,W-M-(M+pw+24));g.fillText(sub,M+pw+24,y+(sq?78:120));
@@ -607,7 +607,7 @@ async function posterPng(list,fmt){
 const M_=()=>M();
 const rows_n=(l,sq)=>sq?3:6;
 function fitText(g,t,max){t=String(t);if(g.measureText(t).width<=max)return t;while(t.length>1&&g.measureText(t+'…').width>max)t=t.slice(0,-1);return t+'…'}
-function promoShareText(list){return '*PROMO KAmart* 🛒\n'+list.map(p=>'• '+promoDesc(p)+' ('+promoPeriod(p).toLowerCase()+')').join('\n')+'\n\nPesan dari HP, ambil saat istirahat:\n'+SITE()}
+function promoShareText(list){return '*PROMO KAmart* 🛒\n'+list.map(p=>'• '+promoDesc(p)+' ('+promoPeriod(p).toLowerCase()+')').join('\n')+'\n\nPesan dari HP, ambil saat istirahat, awal masuk, atau pulang kerja:\n'+SITE()}
 function closePoster(){if(S.poster&&S.poster.url)URL.revokeObjectURL(S.poster.url);S.poster=null}
 async function makePoster(){const P=S.poster;if(!P)return;if(P.url)URL.revokeObjectURL(P.url);P.url='';P.blob=null;render();
   try{const b=await posterPng(P.list,P.fmt);if(S.poster!==P)return;P.blob=b;P.url=URL.createObjectURL(b)}catch(e){toast((e&&e.message)||'Poster gagal dibuat')}render()}
