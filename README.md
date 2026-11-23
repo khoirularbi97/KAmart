@@ -152,6 +152,16 @@ Tanpa pengaturan apa pun, foto disimpan di tabel `product_images` (database). Ag
 Foto yang sudah ada otomatis dipindahkan saat API dijalankan ulang. Foto lama terhapus dari bucket saat diganti atau dihapus.
 Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `NEON_BUCKET_PUBLIC_URL`.
 
+## Promo & diskon
+
+Menu admin **Promo**, berlaku di toko online dan kasir:
+- **Harga coret**: harga produk turun selama periode promo (tampil "-25%" dan harga lama dicoret).
+- **Beli X**: beli X harga khusus (mis. 3 pcs Rp15.000) atau beli X gratis Y.
+- **Minimal belanja**: potongan Rp atau % (dengan batas maksimal) otomatis saat belanja mencapai minimal; dipakai yang paling hemat.
+- **Voucher**: kode yang diketik pembeli/kasir, potongan Rp atau %, minimal belanja, kuota. Kode voucher tidak pernah dikirim ke toko publik; pesanan batal tidak mengurangi kuota.
+
+Urutan hitung: harga coret → beli X → minimal belanja → voucher. Semua dihitung ulang di server (`backend/src/promo.js`); salinan yang sama ada di frontend supaya angka keranjang sama dengan struk. Setiap promo bisa diberi tanggal mulai/selesai dan dimatikan sementara.
+
 ## Kelola Master
 
 Menu admin **Kelola Master** untuk mengatur tanpa mengubah kode:
@@ -229,6 +239,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | POST | `/api/payment/midtrans` | Midtrans (signature) | Webhook pembayaran |
 | GET | `/api/master` | publik | Data master (kategori, metode bayar, waktu ambil, info toko) |
 | PUT | `/api/admin/master` | admin | Simpan data master (`renames` memindahkan produk saat kategori diganti nama) |
+| POST | `/api/promos/voucher` | publik (dibatasi) | Cek kode voucher |
+| PUT/DELETE | `/api/admin/promos/:id` | admin | Simpan / hapus promo |
 | POST | `/api/auth/login` | publik | Login admin, mengembalikan token (berlaku 7 hari) |
 | GET | `/api/admin/data` | admin | Semua produk, pelanggan, pesanan, stok masuk |
 | PUT | `/api/admin/products/:kode` | admin | Tambah/ubah produk (termasuk foto) |

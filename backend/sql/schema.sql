@@ -96,3 +96,15 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 -- Metode bayar kini diatur lewat Kelola Master, jadi batasan lama dilepas.
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_pay_check;
+
+-- Promo & diskon (harga coret, beli X, minimal belanja, voucher). Isi promo disimpan sebagai JSON.
+CREATE TABLE IF NOT EXISTS promos (
+  id         TEXT PRIMARY KEY,
+  data       JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS diskon JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS voucher TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS orders_voucher ON orders (voucher) WHERE voucher <> '';

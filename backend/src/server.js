@@ -8,6 +8,7 @@ const { migrate, seedIfEmpty } = require('./migrate');
 const storage = require('./storage');
 const midtrans = require('./midtrans');
 const master = require('./master');
+const promo = require('./promo');
 
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -68,6 +69,7 @@ const mapOrder = (r) => ({
   total: r.total, modalTotal: r.modal_total, pay: r.pay, paid: r.paid,
   paidAt: r.paid_at ? new Date(r.paid_at).toISOString() : null, stage: r.stage,
   slot: r.slot, note: r.note, cashIn: r.cash_in, change: r.change_amt,
+  subtotal: r.subtotal == null ? r.total : r.subtotal, diskon: r.diskon || [], voucher: r.voucher || '',
 });
 const mapPublicOrder = (r) => {
   const o = mapOrder(r);
@@ -115,7 +117,13 @@ function orderCode() {
  * Membuat pesanan dalam satu transaksi: mengunci baris produk, memeriksa stok,
  * mengambil harga dari database (bukan dari browser), lalu menyimpan.
  */
-async function createOrder({ items, source, customerName, customerLine, pay, slot, note, cashIn, allowHidden }) {
+async function loadPromos(q) {
+  const { rows } = await q.query('SELECT id, data FROM promos ORDER BY created_at');
+  return rows.map((r) => Object.assign({ id: r.id }, r.data));
+}
+const rpTxt = (n) => 'Rp' + Number(n).toLocaleString('id-ID');
+
+async function createOrder({ items, source, customerName, customerLine, pay, slot, note, cashIn, allowHidden, voucher }) {
   if (!Array.isArray(items) || items.length === 0) throw bad('Keranjang masih kosong.');
   if (items.length > 30) throw bad('Terlalu banyak jenis barang dalam satu pesanan.');
   const qtyByKode = new Map();
@@ -142,8 +150,32 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
       if (Number(p.stock) < qty) throw bad('Stok ' + p.name + ' tinggal ' + Math.max(0, Number(p.stock)) + '.');
       lines.push({ kode, name: p.name, qty, price: p.jual, modal: p.modal });
     }
-    const total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+    // Promo dihitung di server (harga dari browser tidak dipakai).
+    const promos = await loadPromos(client);
+    const code = str(voucher, 20).toUpperCase();
+    if (code) {
+      const v = promos.find((x) => x.tipe === 'voucher' && x.voucher === code);
+      if (v) {
+        await client.query('SELECT id FROM promos WHERE id = $1 FOR UPDATE', [v.id]);
+        if (v.kuota > 0) {
+          const u = await client.query('SELECT count(*)::int AS n FROM orders WHERE voucher = $1 AND stage >= 0', [code]);
+          if (u.rows[0].n >= v.kuota) throw bad('Kuota voucher ' + code + ' sudah habis.');
+        }
+      }
+    }
+    const hasil = promo.hitungPromo(lines, promos, { voucher: code, rp: rpTxt });
+    if (hasil.voucherErr) throw bad(hasil.voucherErr);
+    const finalLines = hasil.items.map((l) => {
+      const o = { kode: l.kode, name: l.name, qty: l.qty, price: l.price, modal: l.modal };
+      if (l.normal !== l.price) { o.normal = l.normal; o.promoId = l.promoId; }
+      return o;
+    });
+    lines.length = 0;
+    lines.push(...finalLines);
+    const total = hasil.total;
+    const subtotal = hasil.subtotal;
     const modalTotal = lines.reduce((s, l) => s + l.qty * l.modal, 0);
+    const usedVoucher = hasil.diskon.some((d) => d.tipe === 'voucher') ? code : '';
 
     let name = customerName;
     let line = customerLine;
@@ -167,11 +199,11 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
 
     const ins = await client.query(
       `INSERT INTO orders (id, code, source, customer_name, customer_line, items, total, modal_total,
-         pay, paid, paid_at, stage, slot, note, cash_in, change_amt, public_token)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,${paid ? 'now()' : 'NULL'},$11,$12,$13,$14,$15,$16)
+         pay, paid, paid_at, stage, slot, note, cash_in, change_amt, public_token, subtotal, diskon, voucher)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,${paid ? 'now()' : 'NULL'},$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING *`,
       [id, orderCode(), source, name, line, JSON.stringify(lines), total, modalTotal,
-        pay, paid, stage, slot, note, cash, change, token],
+        pay, paid, stage, slot, note, cash, change, token, subtotal, JSON.stringify(hasil.diskon), usedVoucher],
     );
     await client.query('COMMIT');
     return { row: ins.rows[0], token };
@@ -210,7 +242,9 @@ app.get('/api/images/:kode', ah(async (req, res) => {
 /* Publik: katalog toko */
 app.get('/api/products', ah(async (req, res) => {
   const { rows } = await db.query(PRODUCTS_SQL + ' WHERE p.online ORDER BY p.kode');
-  res.json({ products: rows.filter((r) => master.catOnline(r.cat)).map(mapPublicProduct), master: master.get() });
+  const now = new Date();
+  const promos = promo.publicView(await loadPromos(db)).filter((p) => promo.promoAktif(p, now) || (p.mulai && new Date(p.mulai) > now));
+  res.json({ products: rows.filter((r) => master.catOnline(r.cat)).map(mapPublicProduct), master: master.get(), promos });
 }));
 
 /* Publik: data master (kategori, metode bayar, waktu ambil, info toko) */
@@ -233,7 +267,7 @@ app.post('/api/orders', ah(async (req, res) => {
   const slot = master.slots().includes(b.slot) ? b.slot : master.defaultSlot();
   const { row, token } = await createOrder({
     items: b.items, source: 'online', customerName, customerLine: str(b.customerLine, 60),
-    pay: b.pay, slot, note: str(b.note, 140), allowHidden: false,
+    pay: b.pay, slot, note: str(b.note, 140), allowHidden: false, voucher: b.voucher,
   });
   res.status(201).json({ order: mapPublicOrder(row), token });
   const items = (row.items || []).map((i) => i.qty + '× ' + i.name).join(', ');
@@ -337,6 +371,27 @@ app.post('/api/payment/midtrans', ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/* Publik: cek kode voucher. Dibatasi 20 kali per 5 menit per IP supaya kode tidak ditebak. */
+const vHits = new Map();
+app.post('/api/promos/voucher', ah(async (req, res) => {
+  const ip = req.ip || 'x';
+  const now = Date.now();
+  const h = vHits.get(ip) || { n: 0, t: now };
+  if (now - h.t > 5 * 60 * 1000) { h.n = 0; h.t = now; }
+  h.n += 1;
+  vHits.set(ip, h);
+  if (h.n > 20) throw new HttpError(429, 'Terlalu banyak percobaan voucher. Coba lagi beberapa menit lagi.');
+  const code = str(req.body && req.body.code, 20).toUpperCase();
+  const all = await loadPromos(db);
+  const v = all.find((x) => x.tipe === 'voucher' && x.voucher === code);
+  if (!code || !v || !promo.promoAktif(v, new Date())) throw bad('Kode voucher tidak berlaku.');
+  if (v.kuota > 0) {
+    const u = await db.query('SELECT count(*)::int AS n FROM orders WHERE voucher = $1 AND stage >= 0', [code]);
+    if (u.rows[0].n >= v.kuota) throw bad('Kuota voucher ' + code + ' sudah habis.');
+  }
+  res.json({ promo: promo.voucherView(v) });
+}));
+
 /* Login admin */
 const attempts = new Map();
 function sameSecret(a, b) {
@@ -389,7 +444,41 @@ admin.get('/data', ah(async (req, res) => {
     orders: o.rows.map(mapOrder),
     stockin: s.rows.map(mapStock),
     master: master.get(),
+    promos: await adminPromos(),
   });
+}));
+
+async function adminPromos() {
+  const list = await loadPromos(db);
+  const u = await db.query("SELECT voucher, count(*)::int AS n FROM orders WHERE voucher <> '' AND stage >= 0 GROUP BY voucher");
+  const used = new Map(u.rows.map((x) => [x.voucher, x.n]));
+  const d = await db.query("SELECT e->>'id' AS id, count(*)::int AS n, sum((e->>'nilai')::int)::int AS total FROM orders, jsonb_array_elements(diskon) e WHERE stage >= 0 GROUP BY 1");
+  const stat = new Map(d.rows.map((x) => [x.id, x]));
+  return list.map((p) => Object.assign({}, p, {
+    dipakai: p.tipe === 'voucher' ? (used.get(p.voucher) || 0) : ((stat.get(p.id) || {}).n || 0),
+    totalPotongan: (stat.get(p.id) || {}).total || 0,
+  }));
+}
+
+admin.put('/promos/:id', ah(async (req, res) => {
+  const id = String(req.params.id || '').replace(/[^\w-]/g, '').slice(0, 40);
+  if (!id) throw bad('ID promo tidak valid.');
+  const kodes = new Set((await db.query('SELECT kode FROM products')).rows.map((r) => r.kode));
+  let p;
+  try { p = promo.sanitize(req.body, kodes); } catch (e) { throw bad(e.message); }
+  if (p.tipe === 'voucher') {
+    const dup = (await loadPromos(db)).find((x) => x.id !== id && x.tipe === 'voucher' && x.voucher === p.voucher);
+    if (dup) throw bad('Kode voucher ' + p.voucher + ' sudah dipakai promo lain.');
+  }
+  await db.query(
+    `INSERT INTO promos (id, data) VALUES ($1, $2)
+     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`, [id, JSON.stringify(p)]);
+  res.json({ promo: Object.assign({ id }, p) });
+}));
+
+admin.delete('/promos/:id', ah(async (req, res) => {
+  await db.query('DELETE FROM promos WHERE id = $1', [String(req.params.id || '')]);
+  res.json({ ok: true });
 }));
 
 /* Simpan data master. renames: [{dari, ke}] untuk kategori yang diganti nama (produk ikut dipindah). */
@@ -494,7 +583,7 @@ admin.post('/orders', ah(async (req, res) => {
   const c = buyer ? await findCustomer(db, buyer) : null;
   const { row } = await createOrder({
     items: b.items, source: 'kasir', customerName: c ? c.name : 'Pembeli umum', customerLine: c ? c.line : '',
-    pay: b.pay, slot: 'Kasir', note: '', cashIn: b.cashIn, allowHidden: true,
+    pay: b.pay, slot: 'Kasir', note: '', cashIn: b.cashIn, allowHidden: true, voucher: b.voucher,
   });
   res.status(201).json({ order: mapOrder(row) });
 }));
