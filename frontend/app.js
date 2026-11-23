@@ -483,6 +483,8 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-prne
   if(d.prdel){S.prdel=p.id;render();return}
   if(d.prdelok){S.prdel=null;try{await deletePromoDoc(p.id);toast('Promo dihapus')}catch(err){}render()}});
 
+/* Kolom angka yang ikut menggambar ulang halaman memakai type=text (inputmode numeric) supaya kursor tidak lompat. Hanya angka yang diterima. */
+document.addEventListener('input',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.num)return;const v=t.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'').slice(0,12);if(v!==t.value){const pos=Math.max(0,(t.selectionStart||v.length)-(t.value.length-v.length));t.value=v;try{t.setSelectionRange(pos,pos)}catch(err){}}},true);
 /* ---------- Banner promo (toko) & poster (admin) ---------- */
 const SITE=()=>window.KAMART_SITE||'https://kamart-liart.vercel.app';
 function promoHead(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode||'';
@@ -885,7 +887,7 @@ function vKasir(){
    '<label class="f">Pembeli<select class="in" id="k-buyer" data-bind="k.buyer" data-live="1"><option value="">Pembeli umum</option>'+S.customers.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>'<option value="'+esc(c.name)+'"'+(k.buyer===c.name?' selected':'')+'>'+esc(c.name)+(c.line?' · '+esc(c.line):'')+'</option>').join('')+'</select></label>'+
    '<div class="seg" role="radiogroup" aria-label="Metode bayar">'+pays('kasir').map(b=>b.kode).map(m=>'<button type="button" class="sg'+(k.method===m?' on':'')+'" role="radio" aria-checked="'+(k.method===m)+'" data-kpay="'+esc(m)+'">'+esc(m==='Kasbon'?'Kasbon':payLabel(m))+'</button>').join('')+'</div>'+
    (k.method==='Tunai'?'<div class="seg">'+[['Uang pas',total],['20rb',20000],['50rb',50000],['100rb',100000]].map(([l,v])=>'<button type="button" class="sg'+(+k.cash===v&&cnt?' on':'')+'" data-cash="'+v+'">'+l+'</button>').join('')+'</div>'+
-     '<label class="f">Uang diterima<input class="in num" id="k-cash" type="number" inputmode="numeric" min="0" data-bind="k.cash" data-live="1" value="'+(+k.cash||'')+'"></label>'+
+     '<label class="f">Uang diterima<input class="in num" id="k-cash" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" data-bind="k.cash" data-live="1" value="'+(+k.cash||'')+'"></label>'+
      '<div class="banner '+(change>=0?'b-lav':'b-pink')+'" style="display:flex;justify-content:space-between;font-weight:700"><span>'+(change>=0?'Kembalian':'Kurang')+'</span><span class="num">'+rp(Math.abs(change))+'</span></div>'
     :k.method==='QRIS'?(total>0?qrisBlock(total)+'<div class="banner b-blue">Minta pembeli scan, tekan Bayar setelah notifikasi dana masuk di DANA.</div>':'<div class="banner b-blue">Pilih produk dulu untuk menampilkan QRIS.</div>')
     :k.method!=='Kasbon'?'<div class="banner b-blue">'+esc(payInfo(k.method).ket||'Pastikan pembayaran sudah diterima, lalu tekan Bayar.')+'</div>':'<div class="banner b-gold" style="color:var(--warn)">'+(k.buyer?'Dicatat sebagai kasbon atas nama '+esc(k.buyer)+'. Kasbon berjalan: '+rp(sum(unpaidKasbon().filter(o=>o.customerName===k.buyer),o=>+o.total||0))+'.':'Pilih nama pembeli untuk mencatat kasbon.')+'</div>')+
@@ -924,8 +926,8 @@ function vStok(){
   '<form id="sForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Catat belanja ke grosir</h3><p>Stok bertambah otomatis</p></div></div><div class="fg">'+
    '<label class="f">Tanggal<input class="in" id="s-date" type="date" data-bind="sf.date" required value="'+esc(f.date)+'"></label>'+
    '<label class="f">Produk<select class="in" id="s-kode" data-bind="sf.kode" data-live="1">'+list.map(p=>'<option value="'+esc(p.kode)+'"'+(f.kode===p.kode?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'+
-   '<label class="f">Jumlah<input class="in num" id="s-qty" type="number" min="1" required data-bind="sf.qty" data-live="1" value="'+esc(f.qty)+'"></label>'+
-   '<label class="f">Harga beli / unit<input class="in num" id="s-harga" type="number" min="0" required data-bind="sf.harga" data-live="1" value="'+esc(f.harga)+'"></label>'+
+   '<label class="f">Jumlah<input class="in num" id="s-qty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" required data-bind="sf.qty" data-live="1" value="'+esc(f.qty)+'"></label>'+
+   '<label class="f">Harga beli / unit<input class="in num" id="s-harga" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" required data-bind="sf.harga" data-live="1" value="'+esc(f.harga)+'"></label>'+
    '<label class="f" style="grid-column:1/-1">Tempat beli<input class="in" id="s-tempat" data-bind="sf.tempat" value="'+esc(f.tempat)+'" placeholder="Nama grosir / agen"></label></div>'+
    '<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="s-upd" data-bind="sf.upd"'+(f.upd?' checked':'')+'> Jadikan harga modal produk</label>'+
    '<div class="banner b-lav" style="display:flex;justify-content:space-between;font-weight:700"><span>Total belanja</span><span class="num">'+rp((+f.qty||0)*(+f.harga||0))+'</span></div>'+
