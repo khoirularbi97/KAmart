@@ -83,7 +83,8 @@ function sanitize(b, productKodes) {
   if (!tipe) throw new PromoError('Jenis promo tidak dikenal.');
   const nama = s(b.nama, 60);
   if (!nama) throw new PromoError('Nama promo wajib diisi.');
-  const p = { tipe, nama, aktif: b.aktif !== false, mulai: tgl(b.mulai), selesai: tgl(b.selesai) };
+  const p = { tipe, nama, aktif: b.aktif !== false, mulai: tgl(b.mulai), selesai: tgl(b.selesai),
+    banner: b.banner === undefined ? tipe !== 'voucher' : !!b.banner };
   if (p.mulai && p.selesai && p.selesai < p.mulai) throw new PromoError('Tanggal selesai harus setelah tanggal mulai.');
   const needKode = () => {
     const k = s(b.kode, 40);
@@ -118,11 +119,13 @@ function sanitize(b, productKodes) {
   return p;
 }
 
-/** Data promo untuk pembeli: tanpa voucher (kode voucher rahasia). */
-const publicView = (list) => list.filter((p) => p.tipe !== 'voucher');
-const voucherView = (p) => ({
+/** Data promo untuk pembeli. Voucher hanya ikut jika admin menampilkannya di banner (kodenya jadi publik). */
+const publicView = (list) => list
+  .filter((p) => p.tipe !== 'voucher' || p.banner === true)
+  .map((p) => (p.tipe === 'voucher' ? Object.assign(voucherView(p), { banner: true, kuota: p.kuota }) : p));
+function voucherView(p) { return ({
   id: p.id, nama: p.nama, tipe: 'voucher', voucher: p.voucher, jenis: p.jenis, nilai: p.nilai, maks: p.maks,
   minBelanja: p.minBelanja, mulai: p.mulai, selesai: p.selesai, aktif: p.aktif,
-});
+}); }
 
 module.exports = { TIPE, PromoError, promoAktif, potongan, hitungPromo, sanitize, publicView, voucherView };

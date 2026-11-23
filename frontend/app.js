@@ -363,8 +363,8 @@ function vToko(){
   const shown=list.filter(p=>(S.cat==='Semua'||p.cat===S.cat)&&(!q||String(p.name).toLowerCase().includes(q)));
   return head+'<div class="stack" style="gap:14px">'+installBanner()+
   '<div class="search">'+ic('search',18)+'<label for="q" class="sr">Cari produk</label><input class="in" id="q" type="search" data-bind="q" data-live="1" placeholder="Cari Pop Mie, kopi…" value="'+esc(S.q)+'"></div>'+
-  '<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</p></div>'+cupHtml()+'</section>'+
-  promoStrip()+'<div class="chips" role="group" aria-label="Kategori">'+cats.map(c=>'<button class="sg'+(S.cat===c?' on':'')+'" data-cat="'+esc(c)+'" aria-pressed="'+(S.cat===c)+'">'+esc(c)+'</button>').join('')+'</div>'+
+  bannerHtml('<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</p></div>'+cupHtml()+'</section>')+
+  '<div class="chips" id="katalog" role="group" aria-label="Kategori">'+cats.map(c=>'<button class="sg'+(S.cat===c?' on':'')+'" data-cat="'+esc(c)+'" aria-pressed="'+(S.cat===c)+'">'+esc(c)+'</button>').join('')+'</div>'+
   (shown.length?'<div class="mgrid">'+shown.map(p=>{const st=stockOf(p.kode),qq=S.cart[p.kode]||0,c=catInfo(p.cat).warna;
     return '<article class="mc"><div class="ph b-'+c+'">'+promoBadge(p)+(p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'">':prodTile(p,true))+'</div><div class="nm">'+esc(p.name)+'</div><div class="st">'+(st>0?'Sisa '+st+' '+esc(p.unit||''):'Stok habis')+'</div><div class="qty">'+priceTag(p)+stepper(p.kode,qq,st,p.name)+'</div></article>'}).join('')+'</div>'
     :'<div class="card empty">'+(q?'Tidak ada produk bernama "'+esc(S.q)+'".':'Belum ada produk yang dijual online.')+'</div>')+
@@ -427,7 +427,7 @@ function promoStatus(p){const now=new Date();if(p.aktif===false)return['Nonaktif
 function promoUsage(p){
   if(p.tipe==='produk'){const hit=i=>i.kode===p.kode&&+i.normal>+i.price&&(!i.promoId||i.promoId===p.id);const os=valid().filter(o=>(o.items||[]).some(hit));return{n:os.length,total:sum(os,o=>sum((o.items||[]).filter(hit),i=>(+i.normal-+i.price)*(+i.qty||0)))}}
   const os=valid().filter(o=>(o.diskon||[]).some(d=>d.id===p.id));return{n:os.length,total:sum(os,o=>sum((o.diskon||[]).filter(d=>d.id===p.id),d=>+d.nilai||0))}}
-function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,mulai:'',selesai:'',kode:k,harga:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
+function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,banner:(tipe||'produk')!=='voucher',mulai:'',selesai:'',kode:k,harga:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
 function vPromo(){
   if(loading())return '<div class="card empty">Memuat promo…</div>';
   const f=S.prf,list=(S.promos||[]).slice().sort((a,b)=>{const o={Aktif:0,Terjadwal:1,Nonaktif:2,Berakhir:3};return o[promoStatus(a)[0]]-o[promoStatus(b)[0]]||String(a.nama).localeCompare(String(b.nama))});
@@ -445,18 +445,21 @@ function vPromo(){
     form='<form id="prForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>'+(f._edit?'Ubah promo':'Promo baru')+'</h3><p>'+esc(PTIPE[f.tipe])+'</p></div><button type="button" class="btn3" data-act="prclose">Tutup</button></div>'+
       '<div class="fg">'+(f._edit?'':sel('tipe','Jenis promo',Object.entries(PTIPE),true))+inp('nama','Nama promo','text',' required maxlength="60" placeholder="Contoh: Promo gajian"')+body+
       '<label class="f">Mulai (opsional)<input class="in" type="datetime-local" id="pr-mulai" data-bind="prf.mulai" value="'+esc(f.mulai)+'"></label><label class="f">Selesai (opsional)<input class="in" type="datetime-local" id="pr-selesai" data-bind="prf.selesai" value="'+esc(f.selesai)+'"></label>'+
-      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-aktif" data-bind="prf.aktif"'+(f.aktif!==false?' checked':'')+'> Aktif</label></div>'+
+      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-aktif" data-bind="prf.aktif"'+(f.aktif!==false?' checked':'')+'> Aktif</label>'+
+      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-banner" data-bind="prf.banner"'+(f.banner?' checked':'')+'> Tampilkan di banner aplikasi'+(f.tipe==='voucher'?' (kode jadi publik)':'')+'</label></div>'+
       '<small style="color:var(--muted)">'+({produk:'Harga produk turun selama promo, tampil dengan harga coret di toko dan kasir.',bundling:'Contoh: beli 3 jadi Rp15.000, atau beli 5 gratis 1 (setiap 6 item, 1 gratis).',minimal:'Otomatis dipotong saat total belanja mencapai minimal. Jika ada beberapa, dipakai yang paling hemat.',voucher:'Pembeli mengetik kode di keranjang. Kasir juga bisa memakai kode. Pesanan batal tidak mengurangi kuota.'})[f.tipe]+'</small>'+
       '<div style="display:flex;gap:8px"><button class="btn" type="submit"'+(S.busy?' disabled':'')+'>'+(S.busy?'Menyimpan…':'Simpan promo')+'</button></div></form>'}
+  const live=list.filter(p=>promoAktif(p,new Date()));
   return '<div class="stack">'+(form||'<div style="display:flex;gap:8px;flex-wrap:wrap">'+Object.entries(PTIPE).map(([t,l])=>'<button class="'+(t==='produk'?'btn':'btn2')+'" data-prnew="'+t+'">'+ic('plus',16,2.4)+l+'</button>').join('')+'</div>')+
+   (!form&&live.length>1?'<div class="banner b-lav" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>Poster semua promo aktif</b><br><small style="color:var(--muted)">'+live.length+' promo dalam satu poster untuk Status WA atau grup.</small></span><button class="btn" data-prposterall="1">Buat poster</button></div>':'')+
    (list.length?'<div class="card" style="padding:4px 16px">'+list.map(p=>{const[st,cl]=promoStatus(p),u=promoUsage(p),cf=S.prdel===p.id;
      return '<div class="prow"><div class="stack" style="gap:4px;min-width:0;flex:1"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b>'+esc(p.nama)+'</b><span class="mtag">'+esc(PTIPE[p.tipe]||p.tipe)+'</span><span class="pill-s '+cl+'">'+st+'</span></span>'+
        '<small>'+esc(promoDesc(p))+'</small><small style="color:var(--muted)">'+(p.mulai||p.selesai?(p.mulai?dLabel(p.mulai):'Sekarang')+' – '+(p.selesai?dLabel(p.selesai):'tanpa batas'):'Tanpa batas waktu')+' · dipakai '+u.n+'× · total potongan '+rp(u.total)+(p.tipe==='voucher'&&+p.kuota?' · sisa kuota '+Math.max(0,p.kuota-u.n):'')+'</small></div>'+
-       '<div class="prow-act"><button class="btn3" data-predit="'+esc(p.id)+'">Ubah</button><button class="btn3" data-prtoggle="'+esc(p.id)+'">'+(p.aktif===false?'Aktifkan':'Matikan')+'</button>'+(cf?'<button class="btn3 dang" data-prdelok="'+esc(p.id)+'">Ya, hapus</button>':'<button class="btn3 dang" data-prdel="'+esc(p.id)+'">Hapus</button>')+'</div></div>'}).join('')+'</div>'
+       '<div class="prow-act"><button class="btn3" data-prposter="'+esc(p.id)+'">Poster</button><button class="btn3" data-predit="'+esc(p.id)+'">Ubah</button><button class="btn3" data-prtoggle="'+esc(p.id)+'">'+(p.aktif===false?'Aktifkan':'Matikan')+'</button>'+(cf?'<button class="btn3 dang" data-prdelok="'+esc(p.id)+'">Ya, hapus</button>':'<button class="btn3 dang" data-prdel="'+esc(p.id)+'">Hapus</button>')+'</div></div>'}).join('')+'</div>'
     :'<div class="card empty">Belum ada promo. Pilih jenis promo di atas untuk membuat.</div>')+'</div>';
 }
 function promoBody(f){
-  const n=v=>Math.max(0,Math.round(+v||0)),b={tipe:f.tipe,nama:String(f.nama||'').trim(),aktif:f.aktif!==false,mulai:f.mulai?new Date(f.mulai).toISOString():null,selesai:f.selesai?new Date(f.selesai).toISOString():null};
+  const n=v=>Math.max(0,Math.round(+v||0)),b={tipe:f.tipe,nama:String(f.nama||'').trim(),aktif:f.aktif!==false,banner:!!f.banner,mulai:f.mulai?new Date(f.mulai).toISOString():null,selesai:f.selesai?new Date(f.selesai).toISOString():null};
   if(!b.nama)throw new Error('Nama promo wajib diisi.');
   if(b.mulai&&b.selesai&&b.selesai<b.mulai)throw new Error('Tanggal selesai harus setelah tanggal mulai.');
   const disk=()=>{b.jenis=f.jenis==='persen'?'persen':'nominal';b.nilai=Math.min(n(f.nilai),b.jenis==='persen'?100:1e7);if(!b.nilai)throw new Error('Isi besar potongan.');b.maks=b.jenis==='persen'?n(f.maks):0;b.minBelanja=n(f.minBelanja)};
@@ -479,6 +482,121 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-prne
   if(d.prtoggle){const b=Object.assign({},p,{aktif:p.aktif===false});['id','dipakai','totalPotongan'].forEach(k=>delete b[k]);try{await savePromoDoc(p.id,b);toast(b.aktif?'Promo diaktifkan':'Promo dimatikan')}catch(err){}render();return}
   if(d.prdel){S.prdel=p.id;render();return}
   if(d.prdelok){S.prdel=null;try{await deletePromoDoc(p.id);toast('Promo dihapus')}catch(err){}render()}});
+
+/* ---------- Banner promo (toko) & poster (admin) ---------- */
+const SITE=()=>window.KAMART_SITE||'https://kamart-liart.vercel.app';
+function promoHead(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode||'';
+  if(p.tipe==='produk')return{k:'HARGA SPESIAL',t:nm,big:rp(p.harga),s:pr.jual?rp(pr.jual):'',strike:true,img:pr.img||'',cat:pr.cat,prod:true,save:pr.jual?'Hemat '+rp(pr.jual-p.harga)+' per '+(pr.unit||'item'):''};
+  if(p.tipe==='bundling')return{k:'PAKET HEMAT',t:nm,big:p.mode==='gratis'?'Beli '+p.qty+' gratis '+p.gratis:p.qty+' pcs '+rp(p.harga),s:p.mode==='gratis'?'':(pr.jual?rp(pr.jual*p.qty):''),strike:p.mode!=='gratis',img:pr.img||'',cat:pr.cat,prod:true,
+    save:pr.jual?(p.mode==='gratis'?'Hemat '+rp(pr.jual*p.gratis)+' tiap '+(+p.qty+ +p.gratis)+' item':'Hemat '+rp(pr.jual*p.qty-p.harga)):''};
+  if(p.tipe==='minimal')return{k:'HEMAT BELANJA',t:'Belanja min '+rp(p.minBelanja),big:'Hemat '+potTxt(p),s:'Otomatis terpotong di keranjang',hint:'Tanpa kode, langsung terpotong saat total belanja cukup.'};
+  return{k:'VOUCHER',t:'Pakai kode',big:p.voucher,s:'Hemat '+potTxt(p)+(+p.minBelanja?' · min belanja '+rp(p.minBelanja):''),code:true,hint:'Ketik kode ini di kolom Voucher pada keranjang'+(+p.kuota?'. Kuota terbatas!':'.')}}
+function promoPeriod(p){const f=d=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}),now=new Date();
+  if(p.mulai&&new Date(p.mulai)>now)return 'Mulai '+f(p.mulai)+(p.selesai?' s/d '+f(p.selesai):'');
+  return p.selesai?'Berlaku s/d '+f(p.selesai):'Berlaku selama persediaan ada'}
+const bannerPromos=()=>actPromos().filter(p=>p.banner!==false&&(p.tipe!=='voucher'||p.banner===true));
+const BCOL=['pink','blue','gold','mint','lav'];
+function bannerHtml(hero){const a=bannerPromos();if(!a.length)return hero;
+  const slides=a.map((p,i)=>{const h=promoHead(p);
+    const act=h.prod?'<button class="bs-btn" data-bprod="'+esc(p.kode)+'">Lihat produk</button>':h.code?'<button class="bs-btn" data-bvouch="'+esc(p.voucher)+'">Pakai kode</button>':'<button class="bs-btn" data-bgo="katalog">Belanja sekarang</button>';
+    const pic=h.prod?(h.img?'<img class="bs-img" src="'+esc(h.img)+'" alt="">':'<span class="bs-img bs-ph">'+prodTile(prod(p.kode)||{cat:h.cat},true)+'</span>'):'<span class="bs-img bs-ph"><span class="bs-emo">'+(h.code?'%':'Rp')+'</span></span>';
+    return '<div class="bsl bs-'+BCOL[i%BCOL.length]+'" role="group" aria-roledescription="slide" aria-label="Promo '+(i+1)+' dari '+a.length+'"><div class="bs-txt"><span class="bs-k">'+esc(h.k)+'</span><b class="bs-t">'+esc(h.t)+'</b><span class="bs-big">'+esc(h.big)+(h.s&&h.strike?' <s>'+esc(h.s)+'</s>':'')+'</span>'+(h.s&&!h.strike?'<span class="bs-s">'+esc(h.s)+'</span>':'')+'<span class="bs-p">'+esc(promoPeriod(p))+'</span>'+act+'</div>'+pic+'</div>'}).join('');
+  const n=a.length+1;
+  return '<div class="bcar" aria-label="Promo"><div class="btrack" id="btrack">'+slides+'<div class="bsl bs-hero">'+hero+'</div></div><div class="bdots">'+Array.from({length:n},(_,i)=>'<button class="bdot'+(i===(S.bIdx||0)?' on':'')+'" data-bdot="'+i+'" aria-label="Slide '+(i+1)+'"></button>').join('')+'</div></div>'}
+function restoreBanner(){const t=document.getElementById('btrack');if(!t)return;const i=Math.min(S.bIdx||0,t.children.length-1);if(i>0)t.scrollLeft=i*t.clientWidth}
+document.addEventListener('scroll',e=>{const t=e.target;if(!t||t.id!=='btrack')return;const i=Math.round(t.scrollLeft/Math.max(1,t.clientWidth));if(i!==S.bIdx){S.bIdx=i;document.querySelectorAll('.bdot').forEach((d,j)=>d.classList.toggle('on',j===i))}},true);
+setInterval(()=>{const t=document.getElementById('btrack');if(!t||document.hidden||t.matches(':hover'))return;const n=t.children.length,i=((S.bIdx||0)+1)%n;t.scrollTo({left:i*t.clientWidth,behavior:'smooth'})},6000);
+
+function loadImg(src){return new Promise(res=>{if(!src)return res(null);const i=new Image();try{if(!/^(data|blob):/.test(src)&&new URL(src,location.href).origin!==location.origin)i.crossOrigin='anonymous'}catch(e){}i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src})}
+async function posterPng(list,fmt){
+  const sq=fmt==='square',W=1080,H=sq?1080:1920,F="'Poppins',system-ui,sans-serif";
+  try{await document.fonts.ready}catch(e){}
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  const rr=(x,y,w,h,r)=>{g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()};
+  const font=(w,sz)=>{g.font=w+' '+sz+'px '+F};
+  const wrap=(t,max)=>{const out=[];let cur='';String(t).split(' ').forEach(w=>{const tt=cur?cur+' '+w:w;if(g.measureText(tt).width>max&&cur){out.push(cur);cur=w}else cur=tt});if(cur)out.push(cur);return out};
+  const fit=(t,w,sz,min,max)=>{font(w,sz);while(sz>min&&g.measureText(t).width>max){sz-=4;font(w,sz)}return sz};
+  const bg=g.createLinearGradient(0,0,W,H);bg.addColorStop(0,'#8E78E6');bg.addColorStop(1,'#4B37A3');g.fillStyle=bg;g.fillRect(0,0,W,H);
+  g.globalAlpha=.16;g.fillStyle='#FFC7DC';g.beginPath();g.arc(W-40,sq?120:180,sq?220:320,0,7);g.fill();g.fillStyle='#BDEBD5';g.beginPath();g.arc(60,H-(sq?120:260),sq?240:360,0,7);g.fill();g.globalAlpha=1;
+  const M=sq?56:80;let y=sq?52:100;const LS=sq?92:128;
+  const lg=await logoImg();if(lg){g.save();g.beginPath();g.arc(M+LS/2,y+LS/2,LS/2,0,7);g.clip();g.drawImage(lg,M,y,LS,LS);g.restore()}
+  g.fillStyle='#fff';font('800',sq?54:70);g.fillText('KAmart',M+LS+26,y+LS/2+(sq?2:4));
+  g.fillStyle='#EDE7FF';font('500',sq?24:30);g.fillText('Toko kelontong online · ambil saat istirahat',M+LS+28,y+LS/2+(sq?38:50));
+  y+=LS+(sq?30:60);
+  g.fillStyle='#FFE27A';font('900',sq?96:150);g.fillText('PROMO',M,y+(sq?84:130));
+  font('900',sq?96:150);const pw=g.measureText('PROMO').width,sub=list.length>1?list.length+' promo spesial':'spesial buat kamu';g.fillStyle='#fff';fit(sub,'700',sq?30:40,20,W-M-(M+pw+24));g.fillText(sub,M+pw+24,y+(sq?78:120));
+  y+=sq?112:170;
+  const footH=sq?196:300,cardY=y,cardH=H-y-footH-(sq?24:50),cx=M+(sq?40:56),cw=W-2*M-2*(sq?40:56);
+  g.save();g.shadowColor='rgba(30,10,80,.35)';g.shadowBlur=40;g.shadowOffsetY=16;rr(M,cardY,W-2*M,cardH,sq?40:56);g.fillStyle='#fff';g.fill();g.restore();
+  let cy=cardY+(sq?40:70);
+  const pill=(t,x,yy,bgc,fc,sz)=>{font('800',sz);const w=g.measureText(t).width+sz*1.4,h=sz*1.9;rr(x,yy,w,h,h/2);g.fillStyle=bgc;g.fill();g.fillStyle=fc;g.fillText(t,x+sz*0.7,yy+sz*1.32);return w};
+  if(list.length===1){const p=list[0],h=promoHead(p);
+    pill(h.k,cx,cy,'#E24B6B','#fff',sq?26:34);cy+=sq?76:110;
+    let tw=cw;const imgS=sq?250:420;
+    if(h.prod){const im=await loadImg(h.img),ix=cx+cw-imgS,iy=cy-(sq?6:10);
+      g.save();rr(ix,iy,imgS,imgS,sq?36:48);g.clip();
+      if(im){const k=Math.max(imgS/im.width,imgS/im.height);g.drawImage(im,ix+(imgS-im.width*k)/2,iy+(imgS-im.height*k)/2,im.width*k,im.height*k)}
+      else{const col={pink:'#F7BFD2',blue:'#BCD0F7',gold:'#F7DA92',lav:'#D9CDF6',mint:'#BFE9D4'}[catInfo(h.cat).warna]||'#D9CDF6';g.fillStyle=col;g.fillRect(ix,iy,imgS,imgS);g.fillStyle='rgba(255,255,255,.75)';font('800',imgS*.42);g.textAlign='center';g.fillText((h.t||'?')[0].toUpperCase(),ix+imgS/2,iy+imgS*.64);g.textAlign='left'}
+      g.restore();tw=cw-imgS-(sq?24:36)}
+    font('800',sq?48:66);const tl=wrap(h.t,tw).slice(0,3);g.fillStyle='#2B2140';tl.forEach(l=>{g.fillText(l,cx,cy+(sq?44:60));cy+=sq?58:80});
+    if(h.prod)cy=Math.max(cy+(sq?10:20),cardY+(sq?40:70)+(sq?76:110)+imgS+(sq?14:30));else cy+=sq?20:40;
+    if(h.code){const bh=sq?120:170;g.save();g.setLineDash([16,12]);g.lineWidth=5;g.strokeStyle='#7A66D0';rr(cx,cy,cw,bh,28);g.stroke();g.restore();g.fillStyle='#F2EDFF';rr(cx+6,cy+6,cw-12,bh-12,24);g.fill();
+      const sz=fit(h.big,'900',sq?84:120,40,cw-60);g.fillStyle='#5B47B0';g.textAlign='center';g.fillText(h.big,cx+cw/2,cy+bh/2+sz*.36);g.textAlign='left';cy+=bh+(sq?44:60)}
+    else{const sz=fit(h.big,'900',sq?96:140,44,cw);g.fillStyle='#E24B6B';g.fillText(h.big,cx,cy+sz*.82);cy+=sz+(sq?10:20)}
+    if(h.s){font(h.strike?'600':'600',sq?32:44);g.fillStyle='#7C7191';const t=h.strike?'Normal '+h.s:h.s;const ln=wrap(t,cw).slice(0,2);ln.forEach(l=>{g.fillText(l,cx,cy+(sq?30:40));if(h.strike){const w=g.measureText(l).width,x0=cx+g.measureText('Normal ').width;g.fillRect(x0,cy+(sq?19:26),w-g.measureText('Normal ').width,sq?3:4)}cy+=sq?42:56})}
+    if(h.save){cy+=sq?10:24;pill(h.save,cx,cy,'#E2F5EA','#22704A',sq?26:38);cy+=(sq?26:38)*1.9+(sq?16:30)}
+    if(h.hint){font('500',sq?26:36);g.fillStyle='#54496A';wrap(h.hint,cw).slice(0,2).forEach(l=>{g.fillText(l,cx,cy+(sq?28:40));cy+=sq?38:52})}
+    font('700',sq?28:38);g.fillStyle='#5B47B0';g.fillText(promoPeriod(p),cx,cardY+cardH-(sq?36:56));
+  }else{
+    const rows=list.slice(0,sq?3:6),rowH=(cardH-(list.length>rows_n(list,sq)?(sq?70:110):(sq?40:70)))/Math.min(list.length,sq?3:6);
+    rows.forEach((p,i)=>{const h=promoHead(p),ry=cy+i*rowH;
+      if(i)g.fillStyle='#EEE7F7',g.fillRect(cx,ry-(sq?10:16),cw,3);
+      pill(h.k,cx,ry,['#E24B6B','#4A78D0','#D39B1C','#2E9E6A','#7A66D0'][i%5],'#fff',sq?18:24);
+      font('800',sq?32:44);g.fillStyle='#2B2140';const t=wrap(h.t,cw)[0];g.fillText(t,cx,ry+(sq?72:100));
+      const sz=fit(h.big,'900',sq?42:60,26,cw);g.fillStyle='#E24B6B';g.fillText(h.big,cx,ry+(sq?72:100)+sz+ (sq?6:10));
+      if(h.s){const bw=g.measureText(h.big).width;font('600',sq?22:30);g.fillStyle='#7C7191';const tt=(h.strike?'Normal ':'')+h.s;if(cx+bw+20+g.measureText(tt).width<=cx+cw)g.fillText(tt,cx+bw+20,ry+(sq?72:100)+sz+(sq?4:8))}});
+    if(list.length>rows.length){font('700',sq?24:32);g.fillStyle='#7A66D0';g.fillText('+'+(list.length-rows.length)+' promo lainnya di aplikasi',cx,cardY+cardH-(sq?34:52))}
+  }
+  // footer: QR + ajakan
+  const fy=H-footH+(sq?8:20),qs=sq?170:250;
+  rr(M,fy,qs,qs,24);g.fillStyle='#fff';g.fill();
+  try{if(typeof qrcode==='function'){const q=qrcode(0,'M');q.addData(SITE());q.make();const n=q.getModuleCount(),cs=(qs-28)/n;g.fillStyle='#2B2140';for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++)if(q.isDark(r,cc))g.fillRect(M+14+cc*cs,fy+14+r*cs,Math.ceil(cs),Math.ceil(cs))}}catch(e){}
+  const tx=M+qs+(sq?30:44),tw2=W-M-tx;g.fillStyle='#fff';font('800',sq?38:54);g.fillText('Pesan sekarang!',tx,fy+(sq?48:70));
+  font('600',sq?26:36);g.fillStyle='#EDE7FF';g.fillText(fitText(g,SITE().replace(/^https?:\/\//,''),tw2),tx,fy+(sq?92:130));
+  font('500',sq?22:30);g.fillText(fitText(g,'Ambil di '+M_().toko.lokasi,tw2),tx,fy+(sq?132:186));
+  if(!sq){g.fillText(fitText(g,'Scan QR atau buka link di atas',tw2),tx,fy+234)}
+  return await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Poster gagal dibuat')),'image/png'));
+}
+const M_=()=>M();
+const rows_n=(l,sq)=>sq?3:6;
+function fitText(g,t,max){t=String(t);if(g.measureText(t).width<=max)return t;while(t.length>1&&g.measureText(t+'…').width>max)t=t.slice(0,-1);return t+'…'}
+function promoShareText(list){return '*PROMO KAmart* 🛒\n'+list.map(p=>'• '+promoDesc(p)+' ('+promoPeriod(p).toLowerCase()+')').join('\n')+'\n\nPesan dari HP, ambil saat istirahat:\n'+SITE()}
+function closePoster(){if(S.poster&&S.poster.url)URL.revokeObjectURL(S.poster.url);S.poster=null}
+async function makePoster(){const P=S.poster;if(!P)return;if(P.url)URL.revokeObjectURL(P.url);P.url='';P.blob=null;render();
+  try{const b=await posterPng(P.list,P.fmt);if(S.poster!==P)return;P.blob=b;P.url=URL.createObjectURL(b)}catch(e){toast((e&&e.message)||'Poster gagal dibuat')}render()}
+function posterHtml(){const P=S.poster;
+  return '<div class="modal" role="dialog" aria-modal="true" aria-label="Poster promo"><div class="box" style="max-width:460px">'+
+   '<div class="ch" style="margin:0"><div><h3>Poster promo</h3><p>'+(P.list.length>1?P.list.length+' promo aktif':esc(P.list[0].nama))+'</p></div><button class="btn3" data-act="posterclose">Tutup</button></div>'+
+   '<div class="seg" role="radiogroup" aria-label="Ukuran">'+[['story','Status WA (9:16)'],['square','Grup (kotak)']].map(([v,t])=>'<button type="button" class="sg'+(P.fmt===v?' on':'')+'" role="radio" aria-checked="'+(P.fmt===v)+'" data-pfmt="'+v+'">'+t+'</button>').join('')+'</div>'+
+   '<div class="pprev'+(P.fmt==='square'?' sq':'')+'">'+(P.url?'<img src="'+P.url+'" alt="Pratinjau poster promo">':'<span>Membuat poster…</span>')+'</div>'+
+   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn2" data-act="postersave"'+(P.url?'':' disabled')+'>Unduh PNG</button><button class="btn" data-act="postershare"'+(P.url?'':' disabled')+'>Bagikan ke WA</button></div>'+
+   '<button class="btn3" data-act="postertext" style="align-self:center">Salin teks promo untuk caption</button></div></div>'}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Teks promo disalin')}catch(e){prompt('Salin teks ini:',t)}}
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-bprod],[data-bvouch],[data-bgo],[data-bdot],[data-prposter],[data-prposterall],[data-pfmt],[data-act^="poster"]');if(!t)return;const d=t.dataset;
+  if(d.bdot!=null){const tr=document.getElementById('btrack');if(tr)tr.scrollTo({left:+d.bdot*tr.clientWidth,behavior:'smooth'});return}
+  if(d.bprod){const p=prod(d.bprod);S.q=p?p.name:'';S.cat='Semua';render();const k=document.getElementById('katalog');if(k)k.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(d.bgo){const k=document.getElementById(d.bgo);if(k)k.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(d.bvouch){try{const vp=await fetchVoucher(d.bvouch);vch('co',{code:d.bvouch,vp});toast('Voucher '+d.bvouch+' dipasang. Potongan muncul di keranjang.')}catch(err){toast((err&&err.message)||'Voucher tidak berlaku')}render();return}
+  if(d.prposter||d.prposterall){const list=d.prposterall?(S.promos||[]).filter(p=>promoAktif(p,new Date())):(S.promos||[]).filter(p=>p.id===d.prposter);if(!list.length)return;S.poster={list,fmt:'story',url:'',blob:null};makePoster();return}
+  if(!S.poster)return;
+  if(d.pfmt){if(S.poster.fmt!==d.pfmt){S.poster.fmt=d.pfmt;makePoster()}return}
+  if(d.act==='posterclose'){closePoster();render();return}
+  if(d.act==='postertext'){copyText(promoShareText(S.poster.list));return}
+  const P=S.poster;if(!P.blob)return;const name='promo-kamart-'+(P.fmt==='square'?'kotak':'status')+'.png';
+  if(d.act==='postersave'){try{await saveFile(name,P.blob);toast('Poster diunduh')}catch(err){toast((err&&err.message)||'Unduhan gagal')}return}
+  if(d.act==='postershare'){const text=promoShareText(P.list);
+    try{const file=new File([P.blob],name,{type:'image/png'});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],text});return}}catch(err){if(err&&err.name==='AbortError')return}
+    try{await saveFile(name,P.blob)}catch(err){}copyText(text);window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank','noopener');toast('Poster diunduh. Lampirkan gambarnya di WhatsApp.')}});
 
 /* ---------- Riwayat Pesanan ---------- */
 const ymd=d=>{d=new Date(d);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
@@ -876,7 +994,7 @@ function render(){
   document.body.classList.toggle('loginmode',locked);
   renderShell();
   document.getElementById('view').innerHTML=(S.netErr?'<div class="banner b-gold" role="status" style="color:var(--warn);margin-bottom:14px">'+esc(S.netErr)+'</div>':'')+(locked?vLogin():RENDER[S.view]());
-  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():S.qrisFor?qrisModalHtml():'';
+  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():S.qrisFor?qrisModalHtml():S.poster?posterHtml():'';restoreBanner();
   document.getElementById('notif').innerHTML=notifHtml();
   if(fid){const el=document.getElementById(fid);if(el&&el!==document.activeElement){el.focus({preventScroll:true});try{if(s1!=null)el.setSelectionRange(s1,s2)}catch(e){}}}
 }
@@ -1070,7 +1188,7 @@ imgInput.addEventListener('change',async()=>{const f=imgInput.files&&imgInput.fi
   S.imgBusy=true;render();
   try{const data=await shrink(f);if(S.pf)S.pf.img=data}catch(err){toast('Foto tidak bisa dibaca. Coba file JPG atau PNG.')}
   S.imgBusy=false;imgInput.value='';render()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor)){S.receipt=null;S.placed=null;S.qrisFor=null;render()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor||S.poster)){S.receipt=null;S.placed=null;S.qrisFor=null;closePoster();render()}});
 
 function orderBody(lines,extra,hp){const its=hp?hp.items.map(l=>{const o={kode:l.kode,name:l.name,qty:l.qty,price:l.price,modal:l.modal};if(l.normal!==l.price){o.normal=l.normal;o.promoId=l.promoId}return o}):lines;const sub=sum(its,l=>l.qty*l.price),vd=hp&&hp.diskon.find(d=>d.tipe==='voucher');
   return Object.assign({createdAt:new Date().toISOString(),items:its,subtotal:sub,total:hp?hp.total:sub,diskon:hp?hp.diskon:[],voucher:vd?vd.voucher:'',modalTotal:sum(its,l=>l.qty*l.modal)},extra)}
