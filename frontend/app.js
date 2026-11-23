@@ -509,6 +509,7 @@ function restoreBanner(){const t=document.getElementById('btrack');if(!t)return;
 document.addEventListener('scroll',e=>{const t=e.target;if(!t||t.id!=='btrack')return;const i=Math.round(t.scrollLeft/Math.max(1,t.clientWidth));if(i!==S.bIdx){S.bIdx=i;document.querySelectorAll('.bdot').forEach((d,j)=>d.classList.toggle('on',j===i))}},true);
 setInterval(()=>{const t=document.getElementById('btrack');if(!t||document.hidden||t.matches(':hover'))return;const n=t.children.length,i=((S.bIdx||0)+1)%n;t.scrollTo({left:i*t.clientWidth,behavior:'smooth'})},6000);
 
+function posterImgSrc(p,h){return h.img&&!/^(data|blob):/.test(h.img)?API+'/api/products/'+encodeURIComponent(p.kode)+'/photo?v='+encodeURIComponent(h.img.slice(-24)):h.img}
 function loadImg(src){return new Promise(res=>{if(!src)return res(null);const i=new Image();try{if(!/^(data|blob):/.test(src)&&new URL(src,location.href).origin!==location.origin)i.crossOrigin='anonymous'}catch(e){}i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src})}
 async function posterPng(list,fmt){
   const sq=fmt==='square',W=1080,H=sq?1080:1920,F="'Poppins',system-ui,sans-serif";
@@ -535,7 +536,7 @@ async function posterPng(list,fmt){
   if(list.length===1){const p=list[0],h=promoHead(p);
     pill(h.k,cx,cy,'#E24B6B','#fff',sq?26:34);cy+=sq?76:110;
     let tw=cw;const imgS=sq?250:420;
-    if(h.prod){const im=await loadImg(h.img&&!/^(data|blob):/.test(h.img)?API+'/api/products/'+encodeURIComponent(p.kode)+'/photo?v='+encodeURIComponent(h.img.slice(-24)):h.img),ix=cx+cw-imgS,iy=cy-(sq?6:10);
+    if(h.prod){const im=await loadImg(posterImgSrc(p,h)),ix=cx+cw-imgS,iy=cy-(sq?6:10);
       g.save();rr(ix,iy,imgS,imgS,sq?36:48);g.clip();
       if(im){const k=Math.max(imgS/im.width,imgS/im.height);g.drawImage(im,ix+(imgS-im.width*k)/2,iy+(imgS-im.height*k)/2,im.width*k,im.height*k)}
       else{const col={pink:'#F7BFD2',blue:'#BCD0F7',gold:'#F7DA92',lav:'#D9CDF6',mint:'#BFE9D4'}[catInfo(h.cat).warna]||'#D9CDF6';g.fillStyle=col;g.fillRect(ix,iy,imgS,imgS);g.fillStyle='rgba(255,255,255,.75)';font('800',imgS*.42);g.textAlign='center';g.fillText((h.t||'?')[0].toUpperCase(),ix+imgS/2,iy+imgS*.64);g.textAlign='left'}
@@ -551,12 +552,19 @@ async function posterPng(list,fmt){
     font('700',sq?28:38);g.fillStyle='#5B47B0';g.fillText(promoPeriod(p),cx,cardY+cardH-(sq?36:56));
   }else{
     const rows=list.slice(0,sq?3:6),rowH=(cardH-(list.length>rows_n(list,sq)?(sq?70:110):(sq?40:70)))/Math.min(list.length,sq?3:6);
-    rows.forEach((p,i)=>{const h=promoHead(p),ry=cy+i*rowH;
+    const thumb=(x,y,sz,im,h,cat)=>{g.save();rr(x,y,sz,sz,sz*.2);g.clip();
+      if(im){const k=Math.max(sz/im.width,sz/im.height);g.drawImage(im,x+(sz-im.width*k)/2,y+(sz-im.height*k)/2,im.width*k,im.height*k)}
+      else{g.fillStyle=h.prod?({pink:'#F7BFD2',blue:'#BCD0F7',gold:'#F7DA92',lav:'#D9CDF6',mint:'#BFE9D4'}[catInfo(cat).warna]||'#D9CDF6'):(h.code?'#E6DCFF':'#FFF0C7');g.fillRect(x,y,sz,sz);
+        g.fillStyle=h.prod?'rgba(255,255,255,.8)':'#5B47B0';font('900',h.prod?sz*.46:sz*.34);g.textAlign='center';g.fillText(h.prod?(h.t||'?')[0].toUpperCase():(h.code?'%':'Rp'),x+sz/2,y+sz*(h.prod?.65:.62));g.textAlign='left'}
+      g.restore()};
+    for(let i=0;i<rows.length;i++){const p=rows[i],h=promoHead(p),ry=cy+i*rowH,ts=Math.min(rowH-(sq?28:44),sq?120:180),tw=cw-ts-(sq?20:30);
       if(i)g.fillStyle='#EEE7F7',g.fillRect(cx,ry-(sq?10:16),cw,3);
+      const im=h.prod?await loadImg(posterImgSrc(p,h)):null;thumb(cx+cw-ts,ry+Math.max(0,((sq?118:168)-ts)/2),ts,im,h,h.cat);
       pill(h.k,cx,ry,['#E24B6B','#4A78D0','#D39B1C','#2E9E6A','#7A66D0'][i%5],'#fff',sq?18:24);
-      font('800',sq?32:44);g.fillStyle='#2B2140';const t=wrap(h.t,cw)[0];g.fillText(t,cx,ry+(sq?72:100));
-      const sz=fit(h.big,'900',sq?42:60,26,cw);g.fillStyle='#E24B6B';g.fillText(h.big,cx,ry+(sq?72:100)+sz+ (sq?6:10));
-      if(h.s){const bw=g.measureText(h.big).width;font('600',sq?22:30);g.fillStyle='#7C7191';const tt=(h.strike?'Normal ':'')+h.s;if(cx+bw+20+g.measureText(tt).width<=cx+cw)g.fillText(tt,cx+bw+20,ry+(sq?72:100)+sz+(sq?4:8))}});
+      font('800',sq?32:44);g.fillStyle='#2B2140';g.fillText(fitText(g,h.t,tw),cx,ry+(sq?72:100));
+      const sz=fit(h.big,'900',sq?42:60,24,tw);g.fillStyle='#E24B6B';g.fillText(h.big,cx,ry+(sq?72:100)+sz+(sq?6:10));
+      if(h.s){const bw=g.measureText(h.big).width;font('600',sq?22:30);g.fillStyle='#7C7191';const tt=(h.strike?'Normal ':'')+h.s,y2=ry+(sq?72:100)+sz+(sq?6:10);
+        if(bw+20+g.measureText(tt).width<=tw)g.fillText(tt,cx+bw+20,y2-(sq?2:2));else if(rowH>(sq?150:220))g.fillText(fitText(g,tt,tw),cx,y2+(sq?32:44))}}
     if(list.length>rows.length){font('700',sq?24:32);g.fillStyle='#7A66D0';g.fillText('+'+(list.length-rows.length)+' promo lainnya di aplikasi',cx,cardY+cardH-(sq?34:52))}
   }
   // footer: QR + ajakan
