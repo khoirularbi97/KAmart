@@ -233,8 +233,12 @@ function installBanner(){if(!deferredPrompt||isStandalone()||ls.get('installHide
   return '<div class="banner b-lav" style="display:flex;align-items:center;gap:10px;padding:10px 12px"><img src="icons/icon-192.png" alt="" width="38" height="38" style="border-radius:11px;flex:none"><span style="flex:1;min-width:0;font-size:12px;line-height:1.35"><b>Pasang aplikasi KAmart</b><br>Pesan lebih cepat dari layar utama.</span><button class="btn3" data-act="install">Pasang</button><button class="btn3" data-act="installhide" aria-label="Tutup" style="padding:0 12px">×</button></div>'}
 async function doInstall(){if(!deferredPrompt)return;deferredPrompt.prompt();try{await deferredPrompt.userChoice}catch(e){}deferredPrompt=null;render()}
 function shopHead(title,sub,right,logo){return '<header class="sh-head"><div style="min-width:0;display:flex;align-items:center;gap:10px">'+(logo?'<img src="logo.png" alt="KAmart" width="46" height="46" style="border-radius:50%;flex:none;box-shadow:0 8px 18px rgba(91,71,176,.25)">':'')+'<div style="min-width:0"><h1>'+title+'</h1><p>'+sub+'</p></div></div>'+(right||'')+'</header>'}
+// Pesanan HP ini yang masih berjalan (Baru, Disiapkan, Siap diambil). Batal (-1) dan Selesai (3) tidak dihitung.
+const activeMine=()=>myOrders().filter(o=>o.stage>=0&&o.stage<3);
+// Pesanan milik nama di Akun (jika nama kosong: semua pesanan dari HP ini), tanpa yang dibatalkan.
+const acctOrders=name=>myOrders().filter(o=>o.stage>=0&&(!name||String(o.customerName||'').trim().toLowerCase()===name.toLowerCase()));
 function myOrders(){return S.mine.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt))}
-function shopNav(){const n=sum(cartLines(S.cart,S.pub),l=>l.qty),a=myOrders().filter(o=>o.stage<3).length;
+function shopNav(){const n=sum(cartLines(S.cart,S.pub),l=>l.qty),a=activeMine().length;
   return [['toko','Belanja','shop',0],['keranjang','Keranjang','bag',n],['pesananku','Pesanan','inbox',a],['akun','Akun','users',0]].map(([id,t,i,b])=>'<button class="sn'+(S.view===id?' on':'')+'" data-go="'+id+'"'+(S.view===id?' aria-current="page"':'')+'>'+ic(i,21)+'<span>'+t+'</span>'+(b?'<em>'+b+'</em>':'')+'</button>').join('')}
 function cupHtml(){return '<div aria-hidden="true" style="position:relative;flex:0 0 86px;height:86px">'+
  ['28','40','52'].map((l,i)=>'<span style="position:absolute;left:'+l+'px;top:'+(i===1?0:4)+'px;width:6px;height:14px;border-radius:6px;background:rgba(255,255,255,.85)"></span>').join('')+
@@ -300,13 +304,13 @@ function vPesananku(){
   return h+'</div>';
 }
 function vAkun(){
-  const name=S.co.name.trim(),c=S.reg,mine=myOrders(),kb=sum(mine.filter(o=>o.pay==='Kasbon'&&!o.paid),o=>+o.total||0);
+  const name=S.co.name.trim(),c=S.reg,mine=acctOrders(name),kb=sum(mine.filter(o=>o.pay==='Kasbon'&&!o.paid),o=>+o.total||0);
   return shopHead('Akun','Dipakai otomatis saat memesan')+'<div class="stack" style="gap:12px">'+
   '<div class="card" style="display:flex;align-items:center;gap:14px;padding:16px"><span class="av" style="width:54px;height:54px;font-size:20px;background:'+avc(name||'?')+'">'+esc((name[0]||'?').toUpperCase())+'</span><span style="min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;align-items:flex-start"><b style="font-size:16px">'+(name?esc(name):'Tamu')+'</b><span class="pill-s '+(c?'ps-ok':'ps-lav')+'">'+(c?'Pelanggan terdaftar':'Belum terdaftar')+'</span></span></div>'+
   '<div class="card stack" style="gap:12px;padding:16px"><label class="f">Nama<input class="in" id="ak-name" data-bind="co.name" list="custList2" autocomplete="name" value="'+esc(S.co.name)+'" placeholder="Nama kamu"></label><datalist id="custList2">'+S.customers.map(x=>'<option value="'+esc(x.name)+'">').join('')+'</datalist>'+
    '<label class="f">Bagian / line<input class="in" id="ak-line" data-bind="co.line" list="bagianList2" value="'+esc(S.co.line)+'" placeholder="Contoh: Painting L1"></label>'+dl('bagianList2',bagianList())+
    '<small style="color:var(--muted)">'+(c?'Kamu bisa memakai Bayar pas gajian.':'Bayar pas gajian hanya untuk pelanggan terdaftar. Minta penjual mendaftarkan namamu.')+'</small></div>'+
-  '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><div class="stat b-lav" style="padding:14px"><span class="lb">Total pesanan</span><span class="vl num" style="font-size:20px">'+mine.length+'</span></div><div class="stat b-gold" style="padding:14px"><span class="lb">Kasbon</span><span class="vl num" style="font-size:20px">'+rp(kb)+'</span></div></div>'+
+  '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><div class="stat b-lav" style="padding:14px"><span class="lb">'+(name?'Total pesanan':'Pesanan di HP ini')+'</span><span class="vl num" style="font-size:20px">'+mine.length+'</span></div><div class="stat b-gold" style="padding:14px"><span class="lb">Kasbon</span><span class="vl num" style="font-size:20px">'+rp(kb)+'</span></div></div>'+
   installCard()+'<div class="card stack" style="gap:4px;font-size:13px;padding:16px"><b>Info ambil pesanan</b><span style="color:var(--muted)">Ambil di '+esc(M().toko.lokasi)+' sesuai jam yang dipilih. Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</span></div>'+
   '<div class="card stack" style="gap:2px;padding:8px 16px"><b style="padding:8px 0 4px">Informasi toko</b>'+INFO_PAGES.map(([id,t])=>'<button class="li linkrow" data-go="'+id+'"><span>'+t+'</span><span aria-hidden="true">›</span></button>').join('')+'</div>'+
   '<button class="btn2" data-go="dashboard" style="justify-content:center;height:46px">Masuk admin</button></div>';
