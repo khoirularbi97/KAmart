@@ -612,6 +612,68 @@ admin.post('/stockin', ah(async (req, res) => {
   res.status(201).json({ ok: true });
 }));
 
+/* Ubah / hapus catatan stok masuk. Stok = stok masuk − terjual, jadi dicek supaya tidak minus. */
+async function stockOfKode(client, kode) {
+  const r = await client.query(PRODUCTS_SQL + ' WHERE p.kode = $1', [kode]);
+  return r.rows[0] ? { name: r.rows[0].name, stock: Number(r.rows[0].stock) } : null;
+}
+admin.put('/stockin/:id', ah(async (req, res) => {
+  const id = int(req.params.id);
+  const b = req.body || {};
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
+  const kode = str(b.kode, 40);
+  const qty = int(b.qty); const harga = int(b.harga);
+  if (!Number.isInteger(id)) throw bad('Catatan tidak valid.');
+  if (!date) throw bad('Tanggal tidak valid.');
+  if (!Number.isInteger(qty) || qty < 1) throw bad('Jumlah harus 1 atau lebih.');
+  if (!Number.isInteger(harga) || harga < 0) throw bad('Harga beli tidak valid.');
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query('SELECT * FROM stockin WHERE id = $1 FOR UPDATE', [id]);
+    if (!cur.rowCount) throw new HttpError(404, 'Catatan stok tidak ditemukan.');
+    const old = cur.rows[0];
+    await client.query('SELECT kode FROM products WHERE kode = ANY($1) ORDER BY kode FOR UPDATE', [[old.kode, kode]]);
+    const np = await stockOfKode(client, kode);
+    if (!np) throw bad('Produk tidak ditemukan.');
+    const op = old.kode === kode ? np : await stockOfKode(client, old.kode);
+    const sisaLama = op.stock - old.qty + (old.kode === kode ? qty : 0);
+    if (sisaLama < 0) throw bad('Stok ' + op.name + ' akan minus ' + (-sisaLama) + ' karena sudah terjual. Kurangi perubahan atau batalkan pesanannya dulu.');
+    await client.query('UPDATE stockin SET date = $2, kode = $3, qty = $4, harga = $5, tempat = $6 WHERE id = $1',
+      [id, date, kode, qty, harga, str(b.tempat, 60)]);
+    if (b.updateModal && harga > 0) await client.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [kode, harga]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.json({ ok: true });
+}));
+admin.delete('/stockin/:id', ah(async (req, res) => {
+  const id = int(req.params.id);
+  if (!Number.isInteger(id)) throw bad('Catatan tidak valid.');
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query('SELECT * FROM stockin WHERE id = $1 FOR UPDATE', [id]);
+    if (!cur.rowCount) throw new HttpError(404, 'Catatan stok tidak ditemukan.');
+    const old = cur.rows[0];
+    await client.query('SELECT kode FROM products WHERE kode = $1 FOR UPDATE', [old.kode]);
+    const op = await stockOfKode(client, old.kode);
+    if (op && op.stock - old.qty < 0) throw bad('Tidak bisa dihapus: ' + op.name + ' sudah terjual, stok akan minus ' + (old.qty - op.stock) + '.');
+    await client.query('DELETE FROM stockin WHERE id = $1', [id]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.json({ ok: true });
+}));
+
 admin.post('/customers', ah(async (req, res) => {
   const b = req.body || {};
   const name = str(b.name, 60);

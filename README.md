@@ -248,6 +248,7 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | GET | `/api/admin/data` | admin | Semua produk, pelanggan, pesanan, stok masuk |
 | PUT | `/api/admin/products/:kode` | admin | Tambah/ubah produk (termasuk foto) |
 | POST | `/api/admin/stockin` | admin | Catat stok masuk |
+| PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
 | POST | `/api/admin/customers` | admin | Daftarkan pelanggan |
 | POST | `/api/admin/orders` | admin | Transaksi kasir |
 | PATCH | `/api/admin/orders/:id` | admin | Ubah tahap / tandai lunas / batalkan (`stage: -1`) |

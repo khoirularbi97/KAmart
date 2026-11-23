@@ -955,10 +955,10 @@ function vProduk(){
 function vStok(){
   if(loading())return '<div class="card empty">Memuat stok…</div>';
   const f=S.sf,list=sortedProducts();if(!f.kode&&list[0]){f.kode=list[0].kode;if(!f.harga)f.harga=list[0].modal}
-  const rows=S.stockin.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,40);
+  const all=S.stockin.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id),undefined,{numeric:true})),rows=all.slice(0,S.siLimit||40),ed=f.editId?S.stockin.find(x=>String(x.id)===String(f.editId)):null;
   const mo=mk(new Date());
   return '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start">'+
-  '<form id="sForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Catat belanja ke grosir</h3><p>Stok bertambah otomatis</p></div></div><div class="fg">'+
+  '<form id="sForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>'+(ed?'Ubah catatan belanja':'Catat belanja ke grosir')+'</h3><p>'+(ed?'Stok produk ikut menyesuaikan':'Stok bertambah otomatis')+'</p></div>'+(ed?'<button type="button" class="btn3" data-act="sicancel">Batal</button>':'')+'</div><div class="fg">'+
    '<label class="f">Tanggal<input class="in" id="s-date" type="date" data-bind="sf.date" required value="'+esc(f.date)+'"></label>'+
    '<label class="f">Produk<select class="in" id="s-kode" data-bind="sf.kode" data-live="1">'+list.map(p=>'<option value="'+esc(p.kode)+'"'+(f.kode===p.kode?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'+
    '<label class="f">Jumlah<input class="in num" id="s-qty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" required data-bind="sf.qty" data-live="1" value="'+esc(f.qty)+'"></label>'+
@@ -966,9 +966,14 @@ function vStok(){
    '<label class="f" style="grid-column:1/-1">Tempat beli<input class="in" id="s-tempat" data-bind="sf.tempat" value="'+esc(f.tempat)+'" placeholder="Nama grosir / agen"></label></div>'+
    '<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="s-upd" data-bind="sf.upd"'+(f.upd?' checked':'')+'> Jadikan harga modal produk</label>'+
    '<div class="banner b-lav" style="display:flex;justify-content:space-between;font-weight:700"><span>Total belanja</span><span class="num">'+rp((+f.qty||0)*(+f.harga||0))+'</span></div>'+
-   '<div><button class="btn" type="submit"'+(list.length?'':' disabled')+'>Simpan &amp; tambah stok</button></div></form>'+
+   '<div><button class="btn" type="submit"'+(list.length&&!S.busy?'':' disabled')+'>'+(ed?'Simpan perubahan':'Simpan &amp; tambah stok')+'</button></div></form>'+
   '<div class="card"><div class="ch"><div><h3>Riwayat belanja</h3><p>'+mLabel(mo)+': '+rp(sum(S.stockin.filter(x=>String(x.date).slice(0,7)===mo),x=>(+x.qty||0)*(+x.harga||0)))+'</p></div></div>'+
-   (rows.length?rows.map(x=>{const p=prod(x.kode);return '<div class="li"><span><b>'+esc(p?p.name:x.kode)+' · +'+(+x.qty||0)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+(x.tempat?' · '+esc(x.tempat):'')+' · '+rp(x.harga)+'/unit</small></span><b class="num">'+rp((+x.qty||0)*(+x.harga||0))+'</b></div>'}).join(''):'<div class="empty">Belum ada catatan belanja.</div>')+'</div></div>';
+   (rows.length?rows.map(x=>{const p=prod(x.kode),id=esc(String(x.id)),on=ed&&String(ed.id)===String(x.id),cf=S.sidel===String(x.id);
+     return '<div class="li sirow'+(on?' on':'')+'"><span style="min-width:0"><b>'+esc(p?p.name:x.kode)+' · +'+(+x.qty||0)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+(x.tempat?' · '+esc(x.tempat):'')+' · '+rp(x.harga)+'/unit</small></span>'+
+       '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num">'+rp((+x.qty||0)*(+x.harga||0))+'</b><span style="display:flex;gap:6px">'+
+       '<button type="button" class="btn3 sm" data-siedit="'+id+'"'+(on?' disabled':'')+'>Ubah</button>'+(cf?'<button type="button" class="btn3 sm dang" data-sidelok="'+id+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-sidel="'+id+'">Hapus</button>')+'</span></span></div>'}).join('')+
+     (all.length>rows.length?'<div style="text-align:center;padding-top:10px"><button type="button" class="btn2" data-act="simore">Tampilkan '+Math.min(40,all.length-rows.length)+' lagi</button></div>':'')
+    :'<div class="empty">Belum ada catatan belanja.</div>')+'</div></div>';
 }
 
 function vKasbon(){
@@ -1197,7 +1202,7 @@ document.addEventListener('submit',async e=>{
   if(id==='coForm')await placeOrder();
   if(id==='pForm')await saveProduct();
   if(id==='prForm')await savePromo();
-  if(id==='sForm')await saveStock();
+  if(id==='sForm')await submitStock();
   if(id==='cForm')await saveCustomer();
 });
 // Gambar: dibaca dengan <img>, kalau gagal (mis. HEIC) coba createImageBitmap.
@@ -1289,6 +1294,29 @@ async function exportRiwayat(){
   const rows=[['Tanggal','Kode','Sumber','Pembeli','Bagian','Barang','Jumlah item','Total','Modal','Untung','Metode bayar','Status bayar','Tahap','Waktu ambil','Catatan','Diskon','Voucher']].concat(list.map(o=>[tglJam(o.createdAt),o.code,o.source==='online'?'Online':'Kasir',o.customerName,o.customerLine,itemsText(o),sum(o.items||[],i=>+i.qty||0),+o.total||0,+o.modalTotal||0,o.stage<0?0:profit(o),payLabel(o.pay),o.stage<0?'-':o.paid?'Lunas':'Belum',stageText(o.stage),o.slot||'',o.note||'',sum(o.diskon||[],d=>+d.nilai||0),o.voucher||'']));
   await downloadCsv('riwayat-pesanan-kamart.csv',rows);
 }
+
+async function submitStock(){if(S.sf.editId)return updateStock();return saveStock()}
+function stockAfter(kode,delta){return stockOf(kode)+delta}
+async function updateStock(){
+  const f=S.sf,old=S.stockin.find(x=>String(x.id)===String(f.editId));if(!old){S.sf.editId=null;render();return}
+  const qty=+f.qty||0,harga=+f.harga||0;if(!f.kode||qty<=0){toast('Isi jumlah dulu');return}
+  const sisa=stockAfter(old.kode,-(+old.qty||0)+(old.kode===f.kode?qty:0));
+  if(sisa<0){const p=prod(old.kode);toast('Stok '+(p?p.name:old.kode)+' akan minus '+(-sisa)+' karena sudah terjual');return}
+  const body={date:f.date,kode:f.kode,qty,harga,tempat:String(f.tempat||'').trim()};
+  S.busy=true;render();
+  try{await updateStockDoc(old.id,body,!!f.upd);
+    S.sf=Object.assign({},S.sf,{editId:null,qty:''});toast('Catatan stok diperbarui')}catch(e){}
+  S.busy=false;render()}
+async function updateStockDoc(id,body,upd){await run(api('PUT','/api/admin/stockin/'+encodeURIComponent(id),Object.assign({},body,{updateModal:!!upd}),true));await loadAdmin()}
+async function deleteStockDoc(id){await run(api('DELETE','/api/admin/stockin/'+encodeURIComponent(id),null,true));await loadAdmin()}
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-siedit],[data-sidel],[data-sidelok],[data-act="sicancel"],[data-act="simore"]');if(!t)return;const d=t.dataset;
+  if(d.act==='simore'){S.siLimit=(S.siLimit||40)+40;render();return}
+  if(d.act==='sicancel'){S.sf=Object.assign({},S.sf,{editId:null,qty:''});render();return}
+  const x=S.stockin.find(y=>String(y.id)===String(d.siedit||d.sidel||d.sidelok));if(!x)return;
+  if(d.siedit){S.sidel=null;S.sf=Object.assign({},S.sf,{editId:String(x.id),date:String(x.date).slice(0,10),kode:x.kode,qty:String(x.qty),harga:String(x.harga),tempat:x.tempat||'',upd:false});render();window.scrollTo({top:0,behavior:'smooth'});return}
+  if(d.sidel){S.sidel=String(x.id);render();return}
+  if(d.sidelok){S.sidel=null;const sisa=stockAfter(x.kode,-(+x.qty||0));if(sisa<0){const p=prod(x.kode);toast('Tidak bisa dihapus: '+(p?p.name:x.kode)+' sudah terjual, stok akan minus '+(-sisa));render();return}
+    try{await deleteStockDoc(x.id);if(String(S.sf.editId)===String(x.id))S.sf.editId=null;toast('Catatan stok dihapus')}catch(err){}render()}});
 
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
