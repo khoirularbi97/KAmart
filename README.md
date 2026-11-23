@@ -157,12 +157,13 @@ Jika alamat publik bucket berbeda dari `AWS_ENDPOINT_URL_S3/NEON_BUCKET`, isi `N
 Menu admin **Promo**, berlaku di toko online dan kasir:
 - **Harga coret**: harga produk turun selama periode promo (tampil "-25%" dan harga lama dicoret).
 - **Beli X**: beli X harga khusus (mis. 3 pcs Rp15.000) atau beli X gratis Y.
+- **Beli X bonus Y**: beli produk X (jumlah minimal) dapat produk Y gratis, bisa berlaku kelipatan. Bonus masuk pesanan sebagai baris Rp0, mengurangi stok Y, dan modalnya tetap dihitung di untung. Jika stok Y habis, bonus dilewati.
 - **Minimal belanja**: potongan Rp atau % (dengan batas maksimal) otomatis saat belanja mencapai minimal; dipakai yang paling hemat.
 - **Voucher**: kode yang diketik pembeli/kasir, potongan Rp atau %, minimal belanja, kuota. Kode voucher tidak pernah dikirim ke toko publik; pesanan batal tidak mengurangi kuota.
 
 **Banner & poster**: promo bercentang "Tampilkan di banner aplikasi" muncul sebagai banner geser di halaman toko (voucher hanya jika dicentang, kodenya jadi publik). Tombol **Poster** di menu Promo membuat gambar PNG ukuran Status WA (1080×1920) atau grup (1080×1080) lengkap dengan QR ke toko, lalu bisa langsung dibagikan ke WhatsApp. Alamat di QR bisa diganti lewat `window.KAMART_SITE` di `frontend/config.js`.
 
-Urutan hitung: harga coret → beli X → minimal belanja → voucher. Semua dihitung ulang di server (`backend/src/promo.js`); salinan yang sama ada di frontend supaya angka keranjang sama dengan struk. Setiap promo bisa diberi tanggal mulai/selesai dan dimatikan sementara.
+Urutan hitung: harga coret → beli X → minimal belanja → voucher; bonus produk ditambahkan terakhir. Semua dihitung ulang di server (`backend/src/promo.js`); salinan yang sama ada di frontend supaya angka keranjang sama dengan struk. Setiap promo bisa diberi tanggal mulai/selesai dan dimatikan sementara.
 
 ## Kelola Master
 

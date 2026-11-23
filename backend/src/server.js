@@ -163,11 +163,25 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
         }
       }
     }
-    const hasil = promo.hitungPromo(lines, promos, { voucher: code, rp: rpTxt });
+    // Produk bonus (promo "beli X bonus Y") ikut dikunci supaya stoknya aman.
+    const now = new Date();
+    const bonusKodes = [...new Set(promos.filter((x) => x.tipe === 'bonus' && promo.promoAktif(x, now) && qtyByKode.has(x.kode))
+      .map((x) => x.bonusKode).filter((k) => k && !byKode.has(k)))];
+    if (bonusKodes.length) {
+      await client.query('SELECT kode FROM products WHERE kode = ANY($1) ORDER BY kode FOR UPDATE', [bonusKodes]);
+      const extra = await client.query(PRODUCTS_SQL + ' WHERE p.kode = ANY($1)', [bonusKodes]);
+      extra.rows.forEach((x) => byKode.set(x.kode, x));
+    }
+    const hasil = promo.hitungPromo(lines, promos, {
+      voucher: code, rp: rpTxt, now,
+      prod: (k) => byKode.get(k) || null,
+      stock: (k) => Number((byKode.get(k) || {}).stock || 0),
+    });
     if (hasil.voucherErr) throw bad(hasil.voucherErr);
     const finalLines = hasil.items.map((l) => {
       const o = { kode: l.kode, name: l.name, qty: l.qty, price: l.price, modal: l.modal };
       if (l.normal !== l.price) { o.normal = l.normal; o.promoId = l.promoId; }
+      if (l.bonus) o.bonus = true;
       return o;
     });
     lines.length = 0;

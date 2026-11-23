@@ -134,18 +134,36 @@ function hitungPromo(lines, promos, opt) {
       if (d > 0) { diskon.push({ id: v.id, nama: v.nama, tipe: 'voucher', nilai: d, voucher: code }); sisa -= d; }
     }
   }
-  return { items, subtotal, diskon, totalDiskon: subtotal - sisa, total: Math.max(0, sisa), voucherErr };
+  // Bonus: beli produk X (min qty) dapat produk Y gratis. Ditambahkan sebagai baris harga 0, dibatasi stok Y.
+  const bonus = [];
+  act.filter((p) => p.tipe === 'bonus').forEach((p) => {
+    const src = items.find((l) => l.kode === p.kode);
+    const x = Math.max(1, Math.floor(+p.qty || 0));
+    if (!src || src.qty < x) return;
+    const info = opt.prod ? opt.prod(p.bonusKode) : null;
+    if (!info) return;
+    let n = (p.kelipatan === false ? 1 : Math.floor(src.qty / x)) * Math.max(1, Math.floor(+p.bonusQty || 0));
+    if (opt.stock) {
+      const used = items.filter((l) => l.kode === p.bonusKode).reduce((t, l) => t + l.qty, 0)
+        + bonus.filter((b) => b.kode === p.bonusKode).reduce((t, b) => t + b.qty, 0);
+      n = Math.min(n, Math.max(0, Math.floor(+opt.stock(p.bonusKode) || 0) - used));
+    }
+    if (n > 0) bonus.push({ id: p.id, nama: p.nama, kode: p.bonusKode, name: info.name, qty: n, normal: +info.jual || 0, modal: +info.modal || 0 });
+  });
+  bonus.forEach((b) => items.push({ kode: b.kode, name: b.name, qty: b.qty, price: 0, normal: b.normal, modal: b.modal, promoId: b.id, bonus: true }));
+  return { items, subtotal, diskon, bonus, totalDiskon: subtotal - sisa, total: Math.max(0, sisa), voucherErr };
 }
 
-const PTIPE={produk:'Harga coret',bundling:'Beli X',minimal:'Minimal belanja',voucher:'Voucher'};
+const PTIPE={produk:'Harga coret',bundling:'Beli X',bonus:'Beli X bonus Y',minimal:'Minimal belanja',voucher:'Voucher'};
 const promoList=()=>(S.token&&S.loaded&&S.loaded.admin?S.promos:(S.pubPromos||S.promos||[]))||[];
 function vch(sc,v){S.vouch=S.vouch||{co:{code:'',vp:null},k:{code:'',vp:null}};if(v!==undefined)S.vouch[sc]=v||{code:'',vp:null};return S.vouch[sc]}
-function priceFor(lines,sc){const v=vch(sc);return hitungPromo(lines,promoList(),{voucher:v.code,voucherPromo:v.vp,rp})}
+function priceFor(lines,sc){const v=vch(sc);return hitungPromo(lines,promoList(),{voucher:v.code,voucherPromo:v.vp,rp,prod:k=>prod(k)||null,stock:k=>stockOf(k)})}
 const potTxt=p=>p.jenis==='persen'?(+p.nilai)+'%'+(+p.maks?' (maks '+rp(p.maks)+')':''):rp(p.nilai);
 const bundleText=q=>q.mode==='gratis'?'Beli '+q.qty+' gratis '+q.gratis:q.qty+' pcs '+rp(q.harga);
 function promoDesc(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode;
   if(p.tipe==='produk')return nm+' jadi '+rp(p.harga)+(pr.jual?' (dari '+rp(pr.jual)+')':'');
   if(p.tipe==='bundling')return nm+': '+bundleText(p);
+  if(p.tipe==='bonus'){const y=prod(p.bonusKode)||{};return 'Beli '+p.qty+' '+nm+' gratis '+p.bonusQty+' '+(y.name||p.bonusKode)+(p.kelipatan===false?'':' (berlaku kelipatan)')}
   if(p.tipe==='minimal')return 'Belanja min '+rp(p.minBelanja)+', hemat '+potTxt(p);
   return 'Kode '+p.voucher+': hemat '+potTxt(p)+(+p.minBelanja?', min '+rp(p.minBelanja):'')+(+p.kuota?', kuota '+p.kuota:'')}
 const actPromos=()=>{const now=new Date();return promoList().filter(p=>promoAktif(p,now))};
@@ -153,11 +171,13 @@ function promoPrice(p){const x=actPromos().filter(q=>q.tipe==='produk'&&q.kode==
 function priceTag(p){const pp=promoPrice(p);return pp==null?'<span class="pr num">'+rp(p.jual)+'</span>':'<span class="pr num">'+rp(pp)+' <s>'+rp(p.jual)+'</s></span>'}
 function promoBadge(p){const pp=promoPrice(p),b=actPromos().find(q=>q.tipe==='bundling'&&q.kode===p.kode);
   if(pp!=null&&+p.jual)return '<span class="pbadge">-'+Math.max(1,Math.round((1-pp/p.jual)*100))+'%</span>';
-  return b?'<span class="pbadge">'+esc(bundleText(b))+'</span>':''}
+  if(b)return '<span class="pbadge">'+esc(bundleText(b))+'</span>';
+  const bo=actPromos().find(q=>q.tipe==='bonus'&&q.kode===p.kode);return bo?'<span class="pbadge">Bonus '+esc((prod(bo.bonusKode)||{}).name||bo.bonusKode)+'</span>':''}
 function promoStrip(){const a=actPromos().filter(p=>p.tipe!=='voucher');if(!a.length)return '';
   return '<div class="pstrip" aria-label="Promo">'+a.map(p=>'<span class="pchip">'+ic('money',14)+'<span>'+esc(promoDesc(p))+'</span></span>').join('')+'</div>'}
 function sumRows(hp){return '<div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Subtotal</span><span class="num">'+rp(hp.subtotal)+'</span></div>'+
-  hp.diskon.map(d=>'<div class="li" style="border:0;padding:2px 0;color:var(--ok)"><span>'+esc(d.nama)+'</span><span class="num">−'+rp(d.nilai)+'</span></div>').join('')}
+  hp.diskon.map(d=>'<div class="li" style="border:0;padding:2px 0;color:var(--ok)"><span>'+esc(d.nama)+'</span><span class="num">−'+rp(d.nilai)+'</span></div>').join('')+
+  (hp.bonus||[]).map(b=>'<div class="li" style="border:0;padding:2px 0;color:var(--ok)"><span>Bonus '+b.qty+'× '+esc(b.name)+'</span><span>Gratis</span></div>').join('')}
 function promoHint(hp){const sisa=hp.subtotal-hp.diskon.filter(d=>d.tipe==='bundling').reduce((t,d)=>t+d.nilai,0),got=hp.diskon.find(d=>d.tipe==='minimal');
   const next=actPromos().filter(p=>p.tipe==='minimal'&&+p.minBelanja>sisa&&(!got||potongan(+p.minBelanja,p)>got.nilai)).sort((a,b)=>a.minBelanja-b.minBelanja)[0];
   return next?'<div class="banner b-mint" style="font-size:13px">Tambah <b class="num">'+rp(next.minBelanja-sisa)+'</b> lagi untuk hemat '+esc(potTxt(next))+'.</div>':''}
@@ -376,7 +396,7 @@ function vKeranjang(){
   const lines=cartLines(S.cart,S.pub),hp=priceFor(lines,'co'),total=hp.total,cnt=sum(lines,l=>l.qty),reg=S.reg;
   let h=shopHead('Keranjang',cnt?cnt+' item':'Masih kosong',cnt?'<button class="btn3" data-act="clearCart">Kosongkan</button>':'');
   if(!lines.length)return h+'<div class="card empty stack" style="align-items:center;gap:12px"><span class="tile t-pink" style="width:58px;height:58px;border-radius:18px">'+ic('bag',26)+'</span><span>Belum ada barang di keranjang.</span><button class="btn" data-go="toko">Mulai belanja</button></div>';
-  h+='<div class="stack" style="gap:12px"><div class="card" style="padding:6px 14px">'+hp.items.map(l=>{const p=prod(l.kode);return '<div class="li" style="padding:10px 0"><span style="display:flex;align-items:center;gap:10px;min-width:0">'+(p?prodTile(p):'')+'<span style="min-width:0"><b style="font-size:13px">'+esc(l.name)+'</b><br><small class="num" style="color:var(--muted)">'+rp(l.price)+(l.normal>l.price?' <s>'+rp(l.normal)+'</s>':'')+'</small></span></span>'+stepper(l.kode,l.qty,stockOf(l.kode),l.name)+'</div>'}).join('')+'</div>';
+  h+='<div class="stack" style="gap:12px"><div class="card" style="padding:6px 14px">'+hp.items.map(l=>{const p=prod(l.kode);return '<div class="li" style="padding:10px 0"><span style="display:flex;align-items:center;gap:10px;min-width:0">'+(p?prodTile(p):'')+'<span style="min-width:0"><b style="font-size:13px">'+esc(l.name)+'</b><br><small class="num" style="color:var(--muted)">'+(l.bonus?'<span style="color:var(--ok);font-weight:700">Gratis</span>':rp(l.price))+(l.normal>l.price?' <s>'+rp(l.normal)+'</s>':'')+'</small></span></span>'+(l.bonus?'<span class="pill-s ps-ok">Bonus '+l.qty+'× · Gratis</span>':stepper(l.kode,l.qty,stockOf(l.kode),l.name))+'</div>'}).join('')+'</div>';
   h+='<form id="coForm" class="stack" style="gap:12px">'+
    '<div class="card stack" style="gap:12px;padding:16px"><h3 style="font-size:15px">Data pemesan</h3><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'+
     '<label class="f">Nama<input class="in" id="co-name" data-bind="co.name" list="custList" required autocomplete="name" value="'+esc(S.co.name)+'" placeholder="Nama kamu"></label>'+
@@ -426,8 +446,9 @@ const toLocalInput=iso=>{if(!iso)return '';const d=new Date(iso),z=n=>String(n).
 function promoStatus(p){const now=new Date();if(p.aktif===false)return['Nonaktif','ps-lav'];if(p.mulai&&now<new Date(p.mulai))return['Terjadwal','ps-blue'];if(p.selesai&&now>new Date(p.selesai))return['Berakhir','ps-bad'];return['Aktif','ps-ok']}
 function promoUsage(p){
   if(p.tipe==='produk'){const hit=i=>i.kode===p.kode&&+i.normal>+i.price&&(!i.promoId||i.promoId===p.id);const os=valid().filter(o=>(o.items||[]).some(hit));return{n:os.length,total:sum(os,o=>sum((o.items||[]).filter(hit),i=>(+i.normal-+i.price)*(+i.qty||0)))}}
+  if(p.tipe==='bonus'){const hit=i=>i.bonus&&i.promoId===p.id;const os=valid().filter(o=>(o.items||[]).some(hit));return{n:os.length,total:sum(os,o=>sum((o.items||[]).filter(hit),i=>(+i.normal||0)*(+i.qty||0)))}}
   const os=valid().filter(o=>(o.diskon||[]).some(d=>d.id===p.id));return{n:os.length,total:sum(os,o=>sum((o.diskon||[]).filter(d=>d.id===p.id),d=>+d.nilai||0))}}
-function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,banner:(tipe||'produk')!=='voucher',mulai:'',selesai:'',kode:k,harga:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
+function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,banner:(tipe||'produk')!=='voucher',bonusKode:(sortedProducts()[1]||sortedProducts()[0]||{}).kode||'',bonusQty:1,kelipatan:true,mulai:'',selesai:'',kode:k,harga:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
 function vPromo(){
   if(loading())return '<div class="card empty">Memuat promo…</div>';
   const f=S.prf,list=(S.promos||[]).slice().sort((a,b)=>{const o={Aktif:0,Terjadwal:1,Nonaktif:2,Berakhir:3};return o[promoStatus(a)[0]]-o[promoStatus(b)[0]]||String(a.nama).localeCompare(String(b.nama))});
@@ -440,6 +461,9 @@ function vPromo(){
     if(f.tipe==='produk')body=sel('kode','Produk',prodOpts,true)+inp('harga','Harga promo (normal '+rp(pr.jual||0)+')','number',' required');
     else if(f.tipe==='bundling')body=sel('kode','Produk',prodOpts,true)+sel('mode','Bentuk',[['harga','Beli X harga khusus'],['gratis','Beli X gratis Y']],true)+inp('qty','Beli (X)','number',' required')+
       (f.mode==='gratis'?inp('gratis','Gratis (Y)','number',' required'):inp('harga','Harga untuk X item (normal '+rp((pr.jual||0)*(+f.qty||0))+')','number',' required'));
+    else if(f.tipe==='bonus'){const y=prod(f.bonusKode)||{};body=sel('kode','Produk yang dibeli (X)',prodOpts,true)+inp('qty','Jumlah beli minimal','number',' required')+sel('bonusKode','Produk bonus (Y)',prodOpts,true)+inp('bonusQty','Jumlah bonus','number',' required')+
+      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-kelipatan" data-bind="prf.kelipatan"'+(f.kelipatan!==false?' checked':'')+'> Berlaku kelipatan (beli '+((+f.qty||1)*2)+' dapat '+((+f.bonusQty||1)*2)+')</label>'+
+      (y.name?'<small style="color:var(--muted);grid-column:1/-1">Bonus '+esc(y.name)+' senilai '+rp((+y.jual||0)*(+f.bonusQty||1))+', stok sisa '+stockOf(f.bonusKode)+'.</small>':'')}
     else if(f.tipe==='minimal')body=inp('minBelanja','Minimal belanja (Rp)','number',' required')+jenis();
     else body=inp('voucher','Kode voucher','text',' required maxlength="20" style="text-transform:uppercase"')+jenis()+inp('minBelanja','Minimal belanja (Rp, opsional)','number')+inp('kuota','Kuota pemakaian (0 = tanpa batas)','number');
     form='<form id="prForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>'+(f._edit?'Ubah promo':'Promo baru')+'</h3><p>'+esc(PTIPE[f.tipe])+'</p></div><button type="button" class="btn3" data-act="prclose">Tutup</button></div>'+
@@ -447,7 +471,7 @@ function vPromo(){
       '<label class="f">Mulai (opsional)<input class="in" type="datetime-local" id="pr-mulai" data-bind="prf.mulai" value="'+esc(f.mulai)+'"></label><label class="f">Selesai (opsional)<input class="in" type="datetime-local" id="pr-selesai" data-bind="prf.selesai" value="'+esc(f.selesai)+'"></label>'+
       '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-aktif" data-bind="prf.aktif"'+(f.aktif!==false?' checked':'')+'> Aktif</label>'+
       '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-banner" data-bind="prf.banner"'+(f.banner?' checked':'')+'> Tampilkan di banner aplikasi'+(f.tipe==='voucher'?' (kode jadi publik)':'')+'</label></div>'+
-      '<small style="color:var(--muted)">'+({produk:'Harga produk turun selama promo, tampil dengan harga coret di toko dan kasir.',bundling:'Contoh: beli 3 jadi Rp15.000, atau beli 5 gratis 1 (setiap 6 item, 1 gratis).',minimal:'Otomatis dipotong saat total belanja mencapai minimal. Jika ada beberapa, dipakai yang paling hemat.',voucher:'Pembeli mengetik kode di keranjang. Kasir juga bisa memakai kode. Pesanan batal tidak mengurangi kuota.'})[f.tipe]+'</small>'+
+      '<small style="color:var(--muted)">'+({produk:'Harga produk turun selama promo, tampil dengan harga coret di toko dan kasir.',bundling:'Contoh: beli 3 jadi Rp15.000, atau beli 5 gratis 1 (setiap 6 item, 1 gratis).',bonus:'Contoh: beli 2 Pop Mie gratis 1 kopi. Bonus otomatis masuk pesanan dengan harga Rp0 dan mengurangi stok. Jika stok bonus habis, bonus dilewati.',minimal:'Otomatis dipotong saat total belanja mencapai minimal. Jika ada beberapa, dipakai yang paling hemat.',voucher:'Pembeli mengetik kode di keranjang. Kasir juga bisa memakai kode. Pesanan batal tidak mengurangi kuota.'})[f.tipe]+'</small>'+
       '<div style="display:flex;gap:8px"><button class="btn" type="submit"'+(S.busy?' disabled':'')+'>'+(S.busy?'Menyimpan…':'Simpan promo')+'</button></div></form>'}
   const live=list.filter(p=>promoAktif(p,new Date()));
   return '<div class="stack">'+(form||'<div style="display:flex;gap:8px;flex-wrap:wrap">'+Object.entries(PTIPE).map(([t,l])=>'<button class="'+(t==='produk'?'btn':'btn2')+'" data-prnew="'+t+'">'+ic('plus',16,2.4)+l+'</button>').join('')+'</div>')+
@@ -463,9 +487,11 @@ function promoBody(f){
   if(!b.nama)throw new Error('Nama promo wajib diisi.');
   if(b.mulai&&b.selesai&&b.selesai<b.mulai)throw new Error('Tanggal selesai harus setelah tanggal mulai.');
   const disk=()=>{b.jenis=f.jenis==='persen'?'persen':'nominal';b.nilai=Math.min(n(f.nilai),b.jenis==='persen'?100:1e7);if(!b.nilai)throw new Error('Isi besar potongan.');b.maks=b.jenis==='persen'?n(f.maks):0;b.minBelanja=n(f.minBelanja)};
-  if(f.tipe==='produk'||f.tipe==='bundling'){if(!prod(f.kode))throw new Error('Pilih produk.');b.kode=f.kode}
+  if(f.tipe==='produk'||f.tipe==='bundling'||f.tipe==='bonus'){if(!prod(f.kode))throw new Error('Pilih produk.');b.kode=f.kode}
+  if(f.tipe==='bonus'){if(!prod(f.bonusKode))throw new Error('Pilih produk bonus.');b.bonusKode=f.bonusKode;b.qty=Math.max(1,n(f.qty));b.bonusQty=Math.max(1,n(f.bonusQty));b.kelipatan=f.kelipatan!==false}
   if(f.tipe==='produk'){b.harga=n(f.harga);if(b.harga>=(+prod(f.kode).jual||0))throw new Error('Harga promo harus lebih murah dari harga normal.')}
   else if(f.tipe==='bundling'){b.mode=f.mode==='gratis'?'gratis':'harga';b.qty=Math.max(1,n(f.qty));if(b.mode==='gratis'){b.gratis=Math.max(1,n(f.gratis));b.harga=0}else{b.harga=n(f.harga);b.gratis=0;if(b.qty<2)throw new Error('Harga khusus minimal untuk 2 item.')}}
+  else if(f.tipe==='bonus'){/* sudah diisi di atas */}
   else if(f.tipe==='minimal'){disk();if(!b.minBelanja)throw new Error('Isi minimal belanja.')}
   else{b.voucher=String(f.voucher||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,20);if(b.voucher.length<3)throw new Error('Kode voucher minimal 3 huruf/angka.');
     if((S.promos||[]).some(p=>p.id!==f.id&&p.tipe==='voucher'&&p.voucher===b.voucher))throw new Error('Kode '+b.voucher+' sudah dipakai promo lain.');disk();b.kuota=n(f.kuota)}
@@ -491,6 +517,7 @@ function promoHead(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode||'';
   if(p.tipe==='produk')return{k:'HARGA SPESIAL',t:nm,big:rp(p.harga),s:pr.jual?rp(pr.jual):'',strike:true,img:pr.img||'',cat:pr.cat,prod:true,save:pr.jual?'Hemat '+rp(pr.jual-p.harga)+' per '+(pr.unit||'item'):''};
   if(p.tipe==='bundling')return{k:'PAKET HEMAT',t:nm,big:p.mode==='gratis'?'Beli '+p.qty+' gratis '+p.gratis:p.qty+' pcs '+rp(p.harga),s:p.mode==='gratis'?'':(pr.jual?rp(pr.jual*p.qty):''),strike:p.mode!=='gratis',img:pr.img||'',cat:pr.cat,prod:true,
     save:pr.jual?(p.mode==='gratis'?'Hemat '+rp(pr.jual*p.gratis)+' tiap '+(+p.qty+ +p.gratis)+' item':'Hemat '+rp(pr.jual*p.qty-p.harga)):''};
+  if(p.tipe==='bonus'){const yb=prod(p.bonusKode)||{};return{k:'GRATIS BONUS',t:'Beli '+p.qty+' '+nm,big:'Gratis '+p.bonusQty+' '+(yb.name||p.bonusKode),s:p.kelipatan===false?'':'Berlaku kelipatan',img:pr.img||'',cat:pr.cat,prod:true,save:yb.jual?'Senilai '+rp(yb.jual*p.bonusQty):''}}
   if(p.tipe==='minimal')return{k:'HEMAT BELANJA',t:'Belanja min '+rp(p.minBelanja),big:'Hemat '+potTxt(p),s:'Otomatis terpotong di keranjang',hint:'Tanpa kode, langsung terpotong saat total belanja cukup.'};
   return{k:'VOUCHER',t:'Pakai kode',big:p.voucher,s:'Hemat '+potTxt(p)+(+p.minBelanja?' · min belanja '+rp(p.minBelanja):''),code:true,hint:'Ketik kode ini di kolom Voucher pada keranjang'+(+p.kuota?'. Kuota terbatas!':'.')}}
 function promoPeriod(p){const f=d=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}),now=new Date();
@@ -649,7 +676,7 @@ function vRiwayat(){
         '<span class="rhmain"><span class="rhtop"><b>'+esc(o.customerName||'Pembeli umum')+'</b><span class="num'+(st<0?' strike':'')+'">'+rp(o.total)+'</span></span>'+
         '<small>'+esc(o.code||'')+' · '+new Date(o.createdAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+' · '+(o.source==='online'?'Online':'Kasir')+'</small>'+
         '<span class="rhpills"><span class="pill-s '+(st<0?'ps-bad':stagePill(st))+'">'+stageText(st)+'</span>'+(st<0?'':'<span class="pill-s '+(o.paid?'ps-ok':'ps-warn')+'">'+esc(payLabel(o.pay))+(o.paid?' · lunas':' · belum')+'</span>')+'</span></span></button>'+
-        (open?'<div class="rhdet">'+(o.items||[]).map(i=>'<div class="li"><span>'+i.qty+'× '+esc(i.name)+'</span><span class="num">'+rp((+i.qty||0)*(+i.price||0))+'</span></div>').join('')+
+        (open?'<div class="rhdet">'+(o.items||[]).map(i=>'<div class="li"><span>'+i.qty+'× '+esc(i.name)+(i.bonus?' <small style="color:var(--ok);font-weight:700">bonus</small>':'')+'</span><span class="num">'+(i.bonus?'Gratis':rp((+i.qty||0)*(+i.price||0)))+'</span></div>').join('')+
           ((o.diskon||[]).length?sumRows({subtotal:o.subtotal==null?o.total:o.subtotal,diskon:o.diskon}):'')+'<div class="li" style="font-weight:700"><span>Total</span><span class="num">'+rp(o.total)+'</span></div>'+
           '<small style="color:var(--muted)">'+[o.customerLine,o.slot?'Ambil: '+o.slot:'',o.note?'Catatan: '+o.note:'',o.paidAt&&o.paid?'Dibayar '+tglJam(o.paidAt):'',st>=0?'Untung '+rp(profit(o)):''].filter(Boolean).map(esc).join(' · ')+'</small>'+
           '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(st>=0&&!o.paid?'<button class="btn3" data-paid="'+o.id+'">Tandai lunas</button>':'')+'<button class="btn3" data-rcpt="'+o.id+'">Unduh struk</button></div></div>':'')+'</div>'}).join('')+'</div>'
@@ -802,7 +829,7 @@ function vPrivasi(){return infoPage('Kebijakan Privasi','Data apa yang kami simp
   ['Penyimpanan di perangkat','<p>Nama, bagian/line, dan daftar pesanan disimpan di browser HP kamu supaya tidak perlu diisi ulang. Kamu bisa menghapusnya dengan menghapus data situs di pengaturan browser.</p>'],
   ['Antrean pesanan','<p>Halaman Pesanan hanya menampilkan nama depan dan status pesanan yang masih diproses. Harga, isi lengkap, dan riwayat pesanan orang lain tidak ditampilkan.</p>'],
   ['Hak kamu','<p>Kamu dapat meminta data pesananmu dilihat, diperbaiki, atau dihapus dengan menghubungi kami.</p>'+contactHtml()]])}
-function itemsText(o){return (o.items||[]).map(i=>i.qty+'× '+i.name).join(', ')}
+function itemsText(o){return (o.items||[]).map(i=>i.qty+'× '+i.name+(i.bonus?' (bonus)':'')).join(', ')}
 function stagePill(s){return ['ps-lav','ps-bad','ps-warn','ps-ok'][s]||'ps-lav'}
 function plantHtml(){return '<div class="plant" aria-hidden="true">'+
  '<span style="left:46px;top:6px;width:24px;height:70px;border-radius:50%/60% 60% 40% 40%;background:linear-gradient(180deg,#8FD39E,#4E9F63)"></span>'+
@@ -889,7 +916,7 @@ function vKasir(){
     return '<button class="ktile'+(q?' on':'')+'" data-kadd="'+esc(p.kode)+'"'+(st-q<=0?' disabled style="opacity:.55"':'')+' aria-label="Tambah '+esc(p.name)+'"><span style="display:flex;justify-content:space-between;width:100%;align-items:center"><small>'+esc(p.kode)+(catOnline(p.cat)?'':' · 21+')+'</small>'+(q?'<span class="n">'+q+'</span>':'')+'</span>'+(p.img?'<img class="kimg" src="'+esc(p.img)+'" alt="">':'')+'<b style="line-height:1.25">'+esc(p.name)+'</b><span style="display:flex;justify-content:space-between;width:100%;font-size:12px"><b class="num" style="color:var(--primary-ink);font-size:14px">'+rp(p.jual)+'</b><span style="color:var(--muted)">sisa '+st+'</span></span></button>'}).join('')+'</div>'+
     (S.products.length?'':'<div class="card empty">Belum ada produk. Tambahkan di menu Produk.</div>')+'</div>'+
   '<aside class="card sticky stack" style="gap:12px" aria-label="Transaksi"><div class="ch" style="margin:0"><div><h3>Transaksi</h3><p>'+cnt+' item</p></div>'+(cnt?'<button class="btn3" data-act="kclear">Kosongkan</button>':'')+'</div>'+
-   (lines.length?'<div>'+hp.items.map(l=>'<div class="li"><span style="display:flex;align-items:center;gap:6px"><button class="qb m" style="width:32px;height:32px" data-kdec="'+esc(l.kode)+'" aria-label="Kurangi '+esc(l.name)+'">−</button>'+l.qty+'× '+esc(l.name)+'</span><span class="num">'+rp(l.qty*l.price)+'</span></div>').join('')+'</div>':'<div class="empty" style="padding:10px">Ketuk produk untuk menambah.</div>')+
+   (lines.length?'<div>'+hp.items.map(l=>'<div class="li"><span style="display:flex;align-items:center;gap:6px">'+(l.bonus?'<span class="pill-s ps-ok">Bonus</span>':'<button class="qb m" style="width:32px;height:32px" data-kdec="'+esc(l.kode)+'" aria-label="Kurangi '+esc(l.name)+'">−</button>')+l.qty+'× '+esc(l.name)+'</span><span class="num"'+(l.bonus?' style="color:var(--ok);font-weight:700"':'')+'>'+(l.bonus?'Gratis':rp(l.qty*l.price))+'</span></div>').join('')+'</div>':'<div class="empty" style="padding:10px">Ketuk produk untuk menambah.</div>')+
    (lines.length&&(hp.diskon.length||vch('k').code||actPromos().some(p=>p.tipe==='voucher'))?'<div class="stack" style="gap:4px">'+(hp.diskon.length?sumRows(hp):'')+voucherBox('k',hp)+'</div>':'')+
    '<div class="tot"><span>Total</span><span class="num">'+rp(total)+'</span></div>'+
    '<label class="f">Pembeli<select class="in" id="k-buyer" data-bind="k.buyer" data-live="1"><option value="">Pembeli umum</option>'+S.customers.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>'<option value="'+esc(c.name)+'"'+(k.buyer===c.name?' selected':'')+'>'+esc(c.name)+(c.line?' · '+esc(c.line):'')+'</option>').join('')+'</select></label>'+
@@ -1010,7 +1037,7 @@ function render(){
 }
 function receiptText(o){return 'KAmart · '+o.code+'\n'+dLabel(o.createdAt)+'\n'+(o.items||[]).map(i=>i.qty+'x '+i.name+'  '+rp(i.qty*i.price)).join('\n')+'\nTotal: '+rp(o.total)+'\nBayar: '+(o.pay==='Kasbon'?'Kasbon (ditagih saat gajian)':o.pay)+(o.pay==='Tunai'?'\nDiterima: '+rp(o.cashIn)+'\nKembalian: '+rp(o.change):'')+'\nTerima kasih!'}
 function receiptHtml(){const o=S.receipt;return '<div class="modal" role="dialog" aria-modal="true" aria-label="Transaksi berhasil"><div class="box"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center"><span class="tile t-lav" style="border-radius:50%">'+ic('check',24,2.6)+'</span><b style="font-size:18px">Transaksi berhasil</b><small style="color:var(--muted)">'+esc(o.code)+' · '+dLabel(o.createdAt)+' · '+esc(o.customerName)+'</small></div>'+
- '<div style="border-block:1px dashed #DCCDE0;padding:10px 0">'+(o.items||[]).map(i=>'<div class="li" style="border:0;padding:3px 0"><span>'+i.qty+'× '+esc(i.name)+'</span><span class="num">'+rp(i.qty*i.price)+'</span></div>').join('')+'</div>'+
+ '<div style="border-block:1px dashed #DCCDE0;padding:10px 0">'+(o.items||[]).map(i=>'<div class="li" style="border:0;padding:3px 0"><span>'+i.qty+'× '+esc(i.name)+(i.bonus?' <small style="color:var(--ok);font-weight:700">bonus</small>':'')+'</span><span class="num">'+(i.bonus?'Gratis':rp(i.qty*i.price))+'</span></div>').join('')+'</div>'+
  ((o.diskon||[]).length?sumRows({subtotal:o.subtotal==null?o.total:o.subtotal,diskon:o.diskon}):'')+'<div class="li" style="border:0;font-weight:800"><span>Total</span><span class="num">'+rp(o.total)+'</span></div>'+
  (o.pay==='Tunai'?'<div class="li" style="border:0"><span>Diterima</span><span class="num">'+rp(o.cashIn)+'</span></div><div class="li" style="border:0"><span>Kembalian</span><span class="num">'+rp(o.change)+'</span></div>':'<div class="li" style="border:0"><span>Metode</span><span>'+(o.pay==='Kasbon'?'Kasbon · belum dibayar':esc(payLabel(o.pay)))+'</span></div>')+
  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn2" data-act="copyReceipt" style="justify-content:center">Salin struk</button><button class="btn" data-act="closeReceipt">Transaksi baru</button></div><textarea id="rcpt" class="in" rows="4" readonly hidden>'+esc(receiptText(o))+'</textarea></div></div>'}
@@ -1084,7 +1111,7 @@ async function receiptPng(o){
   row('Waktu ambil',o.slot||'-');
   row('Pembayaran',o.pay==='Kasbon'?'Bayar pas gajian':(o.pay||'-')+(o.paid?' · lunas':' · bayar saat ambil'));
   y-=4;dash(y);y+=34;
-  items.forEach(i=>{g.fillStyle='#2B2140';g.font='600 14px '+F;g.fillText(fit(i.qty+'× '+i.name,W-2*P-140),P,y);g.textAlign='right';g.fillText(rp((+i.qty||0)*(+i.price||0)),W-P,y);g.textAlign='left';y+=34});
+  items.forEach(i=>{g.fillStyle='#2B2140';g.font='600 14px '+F;g.fillText(fit(i.qty+'× '+i.name+(i.bonus?' (bonus)':''),W-2*P-140),P,y);g.textAlign='right';if(i.bonus)g.fillStyle='#2E8B57';g.fillText(i.bonus?'Gratis':rp((+i.qty||0)*(+i.price||0)),W-P,y);g.textAlign='left';y+=34});
   y-=8;dash(y);y+=40;
   if(dk.length){const dr=(l,v,c)=>{g.fillStyle=c;g.font='600 14px '+F;g.fillText(fit(l,W-2*P-140),P,y);g.textAlign='right';g.fillText(v,W-P,y);g.textAlign='left';y+=30};
     dr('Subtotal',rp(o.subtotal==null?o.total:o.subtotal),'#675C7B');dk.forEach(d=>dr(d.nama,'−'+rp(d.nilai),'#2E8B57'));y+=10}
@@ -1200,7 +1227,7 @@ imgInput.addEventListener('change',async()=>{const f=imgInput.files&&imgInput.fi
   S.imgBusy=false;imgInput.value='';render()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor||S.poster)){S.receipt=null;S.placed=null;S.qrisFor=null;closePoster();render()}});
 
-function orderBody(lines,extra,hp){const its=hp?hp.items.map(l=>{const o={kode:l.kode,name:l.name,qty:l.qty,price:l.price,modal:l.modal};if(l.normal!==l.price){o.normal=l.normal;o.promoId=l.promoId}return o}):lines;const sub=sum(its,l=>l.qty*l.price),vd=hp&&hp.diskon.find(d=>d.tipe==='voucher');
+function orderBody(lines,extra,hp){const its=hp?hp.items.map(l=>{const o={kode:l.kode,name:l.name,qty:l.qty,price:l.price,modal:l.modal};if(l.normal!==l.price){o.normal=l.normal;o.promoId=l.promoId}if(l.bonus)o.bonus=true;return o}):lines;const sub=sum(its,l=>l.qty*l.price),vd=hp&&hp.diskon.find(d=>d.tipe==='voucher');
   return Object.assign({createdAt:new Date().toISOString(),items:its,subtotal:sub,total:hp?hp.total:sub,diskon:hp?hp.diskon:[],voucher:vd?vd.voucher:'',modalTotal:sum(its,l=>l.qty*l.modal)},extra)}
 async function placeOrder(){
   const lines=cartLines(S.cart,S.pub);const name=S.co.name.trim();

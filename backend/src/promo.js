@@ -2,7 +2,7 @@
  * Jenis: produk (harga coret), bundling (beli X harga khusus / gratis), minimal (diskon minimal belanja), voucher (kode).
  * hitungPromo() HARUS sama persis dengan salinannya di frontend (kamart.html), supaya angka di keranjang = angka di server. */
 
-const TIPE = ['produk', 'bundling', 'minimal', 'voucher'];
+const TIPE = ['produk', 'bundling', 'bonus', 'minimal', 'voucher'];
 
 /* ===== MULAI: mesin hitung (salinan identik di frontend) ===== */
 function promoAktif(p, now) {
@@ -67,7 +67,24 @@ function hitungPromo(lines, promos, opt) {
       if (d > 0) { diskon.push({ id: v.id, nama: v.nama, tipe: 'voucher', nilai: d, voucher: code }); sisa -= d; }
     }
   }
-  return { items, subtotal, diskon, totalDiskon: subtotal - sisa, total: Math.max(0, sisa), voucherErr };
+  // Bonus: beli produk X (min qty) dapat produk Y gratis. Ditambahkan sebagai baris harga 0, dibatasi stok Y.
+  const bonus = [];
+  act.filter((p) => p.tipe === 'bonus').forEach((p) => {
+    const src = items.find((l) => l.kode === p.kode);
+    const x = Math.max(1, Math.floor(+p.qty || 0));
+    if (!src || src.qty < x) return;
+    const info = opt.prod ? opt.prod(p.bonusKode) : null;
+    if (!info) return;
+    let n = (p.kelipatan === false ? 1 : Math.floor(src.qty / x)) * Math.max(1, Math.floor(+p.bonusQty || 0));
+    if (opt.stock) {
+      const used = items.filter((l) => l.kode === p.bonusKode).reduce((t, l) => t + l.qty, 0)
+        + bonus.filter((b) => b.kode === p.bonusKode).reduce((t, b) => t + b.qty, 0);
+      n = Math.min(n, Math.max(0, Math.floor(+opt.stock(p.bonusKode) || 0) - used));
+    }
+    if (n > 0) bonus.push({ id: p.id, nama: p.nama, kode: p.bonusKode, name: info.name, qty: n, normal: +info.jual || 0, modal: +info.modal || 0 });
+  });
+  bonus.forEach((b) => items.push({ kode: b.kode, name: b.name, qty: b.qty, price: 0, normal: b.normal, modal: b.modal, promoId: b.id, bonus: true }));
+  return { items, subtotal, diskon, bonus, totalDiskon: subtotal - sisa, total: Math.max(0, sisa), voucherErr };
 }
 /* ===== SELESAI: mesin hitung ===== */
 
@@ -107,6 +124,14 @@ function sanitize(b, productKodes) {
     p.qty = Math.max(1, n0(b.qty, 100));
     if (p.mode === 'gratis') { p.gratis = Math.max(1, n0(b.gratis, 100)); p.harga = 0; } else { p.harga = n0(b.harga, 100000000); p.gratis = 0; }
     if (p.mode === 'harga' && p.qty < 2) throw new PromoError('Harga khusus minimal untuk 2 item.');
+  } else if (tipe === 'bonus') {
+    p.kode = needKode();
+    p.qty = Math.max(1, n0(b.qty, 100));
+    const bk = s(b.bonusKode, 40);
+    if (!productKodes.has(bk)) throw new PromoError('Pilih produk bonus.');
+    p.bonusKode = bk;
+    p.bonusQty = Math.max(1, n0(b.bonusQty, 100));
+    p.kelipatan = b.kelipatan !== false;
   } else if (tipe === 'minimal') {
     diskonFields();
     if (!p.minBelanja) throw new PromoError('Isi minimal belanja.');
