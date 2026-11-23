@@ -239,6 +239,40 @@ app.get('/api/images/:kode', ah(async (req, res) => {
   res.send(rows[0].data);
 }));
 
+/* Publik: foto produk lewat domain KAmart sendiri. Dipakai pembuat poster, karena browser
+ * tidak mengizinkan gambar dari domain lain (bucket) digambar ke canvas lalu disimpan jadi PNG.
+ * Hanya mengambil foto yang tercatat di produk (bukan URL bebas). */
+app.get('/api/products/:kode/photo', ah(async (req, res) => {
+  const { rows } = await db.query('SELECT img FROM products WHERE kode = $1', [String(req.params.kode || '')]);
+  const img = rows[0] && rows[0].img;
+  if (!img) return res.status(404).json({ error: 'Produk ini belum punya foto.' });
+  if (img.startsWith('/api/images/')) return res.redirect(302, img);
+  if (img.startsWith('data:')) {
+    const m = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(img);
+    if (!m) return res.status(404).json({ error: 'Foto tidak valid.' });
+    res.set('Content-Type', m[1]);
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.send(Buffer.from(m[2], 'base64'));
+  }
+  if (!/^https?:\/\//.test(img)) return res.status(404).json({ error: 'Foto tidak valid.' });
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const r = await fetch(img, { signal: ctrl.signal });
+    const type = r.headers.get('content-type') || '';
+    if (!r.ok || !type.startsWith('image/')) return res.status(502).json({ error: 'Foto tidak bisa diambil.' });
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) return res.status(502).json({ error: 'Foto terlalu besar.' });
+    res.set('Content-Type', type);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(buf);
+  } catch (e) {
+    res.status(502).json({ error: 'Foto tidak bisa diambil.' });
+  } finally {
+    clearTimeout(t);
+  }
+}));
+
 /* Publik: katalog toko */
 app.get('/api/products', ah(async (req, res) => {
   const { rows } = await db.query(PRODUCTS_SQL + ' WHERE p.online ORDER BY p.kode');
