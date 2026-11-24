@@ -612,6 +612,41 @@ admin.post('/stockin', ah(async (req, res) => {
   res.status(201).json({ ok: true });
 }));
 
+/* Koreksi modal di transaksi yang sudah terjadi (mis. salah tulis modal).
+ * body: { modal, month?: 'YYYY-MM' (kosong = semua), setProduct?: bool } */
+admin.post('/products/:kode/remodal', ah(async (req, res) => {
+  const kode = str(req.params.kode, 40);
+  const b = req.body || {};
+  const modal = int(b.modal);
+  if (!Number.isInteger(modal) || modal < 0) throw bad('Modal tidak valid.');
+  const month = /^\d{4}-\d{2}$/.test(b.month || '') ? b.month : null;
+  const client = await db.pool.connect();
+  let updated = 0;
+  try {
+    await client.query('BEGIN');
+    const ex = await client.query('SELECT 1 FROM products WHERE kode = $1 FOR UPDATE', [kode]);
+    if (!ex.rowCount) throw bad('Produk tidak ditemukan.');
+    const q = await client.query(
+      `SELECT id, items FROM orders WHERE items @> $1::jsonb
+         AND ($2::text IS NULL OR to_char(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') = $2)
+       FOR UPDATE`, [JSON.stringify([{ kode }]), month]);
+    for (const o of q.rows) {
+      const items = (o.items || []).map((i) => (i.kode === kode ? Object.assign({}, i, { modal }) : i));
+      const modalTotal = items.reduce((t, i) => t + (Number(i.qty) || 0) * (Number(i.modal) || 0), 0);
+      await client.query('UPDATE orders SET items = $2, modal_total = $3 WHERE id = $1', [o.id, JSON.stringify(items), modalTotal]);
+      updated += 1;
+    }
+    if (b.setProduct) await client.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [kode, modal]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.json({ ok: true, updated });
+}));
+
 /* Ubah / hapus catatan stok masuk. Stok = stok masuk − terjual, jadi dicek supaya tidak minus. */
 async function stockOfKode(client, kode) {
   const r = await client.query(PRODUCTS_SQL + ' WHERE p.kode = $1', [kode]);

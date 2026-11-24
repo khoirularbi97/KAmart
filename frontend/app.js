@@ -1005,12 +1005,14 @@ function vRekap(){
   const belanja=sum(S.stockin.filter(x=>String(x.date).slice(0,7)===mo),x=>(+x.qty||0)*(+x.harga||0));
   const wk=[0,0,0,0,0];list.forEach(o=>{wk[Math.min(4,Math.floor((new Date(o.createdAt).getDate()-1)/7))]+=+o.total||0});
   const max=Math.max(1,...wk),g=['#C6B5FF,#7C69CF','#FFC1D6,#D9467C','#FFE09A,#E0901F','#BFD6FF,#4377DB','#CFC2FF,#6E5AC4'];
-  const per={};list.forEach(o=>(o.items||[]).forEach(i=>{const r=per[i.kode]=per[i.kode]||{name:i.name,q:0,om:0,un:0};r.q+=+i.qty||0;r.om+=(+i.qty||0)*(+i.price||0);r.un+=(+i.qty||0)*((+i.price||0)-(+i.modal||0))}));
+  const per={};list.forEach(o=>(o.items||[]).forEach(i=>{const r=per[i.kode]=per[i.kode]||{kode:i.kode,name:i.name,q:0,om:0,un:0,md:0};r.q+=+i.qty||0;r.om+=(+i.qty||0)*(+i.price||0);r.un+=(+i.qty||0)*((+i.price||0)-(+i.modal||0));r.md+=(+i.qty||0)*(+i.modal||0)}));
   const perA=Object.values(per).sort((a,b)=>b.om-a.om);
   return '<div class="stack"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><label class="f" style="flex-direction:row;align-items:center;gap:10px">Bulan<select class="in" id="r-month" data-bind="month" data-live="1" style="width:auto">'+months.map(m=>'<option value="'+m+'"'+(m===mo?' selected':'')+'>'+mLabel(m)+'</option>').join('')+'</select></label><button class="btn2" data-act="csv">'+ic('down',16)+'Unduh CSV</button></div>'+
   '<div class="grid g4">'+[['lav','money','Penjualan',rp(omzet),list.length+' transaksi'],['gold','trophy','Untung kotor',rp(untung),omzet?'margin '+Math.round(untung/omzet*100)+'%':'–'],['blue','check','Uang diterima',rp(terima),'Belum dibayar '+rp(kb)],['pink','down','Belanja stok',rp(belanja),'dari catatan stok masuk']].map(s=>'<div class="stat b-'+s[0]+'"><div class="row"><span class="tile t-'+s[0]+'">'+ic(s[1],22)+'</span></div><span class="lb">'+s[2]+'</span><span class="vl num">'+s[3]+'</span><span class="sm">'+s[4]+'</span></div>').join('')+'</div>'+
   '<div class="grid g3"><div class="card"><div class="ch"><div><h3>Penjualan per minggu</h3><p>'+mLabel(mo)+'</p></div></div><div class="bars" role="img" aria-label="'+wk.map((x,i)=>'Minggu '+(i+1)+' '+rp(x)).join(', ')+'">'+wk.map((x,i)=>'<div><span class="num">'+(x?Math.round(x/1000)+'rb':'0')+'</span><b style="height:'+Math.round(x/max*120)+'px;background:linear-gradient(180deg,'+g[i]+')"></b><small>Mg '+(i+1)+'</small></div>').join('')+'</div></div>'+
-  '<div class="card"><div class="ch"><div><h3>Per produk</h3><p>Jumlah, omzet, untung</p></div></div>'+(perA.length?perA.map(r=>'<div class="li"><span><b>'+esc(r.name)+'</b><br><small style="color:var(--muted)">'+r.q+' terjual</small></span><span style="text-align:right"><b class="num">'+rp(r.om)+'</b><br><small class="num" style="color:var(--ok)">+'+rp(r.un)+'</small></span></div>').join(''):'<div class="empty">Belum ada penjualan di bulan ini.</div>')+'</div></div></div>';
+  '<div class="card"><div class="ch"><div><h3>Per produk</h3><p>Jumlah, omzet, untung</p></div></div>'+(perA.length?perA.map(r=>{const am=r.q?Math.round(r.md/r.q):0,pm=(prod(r.kode)||{}).modal;
+    return '<div class="li"><span style="min-width:0"><b>'+esc(r.name)+'</b><br><small style="color:var(--muted)">'+r.q+' terjual · modal '+rp(am)+'/unit</small>'+(pm!=null&&+pm!==am?'<br><small style="color:var(--warn)">Modal produk sekarang '+rp(pm)+'</small>':'')+'</span>'+
+    '<span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b class="num">'+rp(r.om)+'</b><small class="num" style="color:'+(r.un<0?'var(--bad)':'var(--ok)')+'">'+(r.un<0?'−':'+')+rp(Math.abs(r.un))+'</small><button type="button" class="btn3 sm" data-remodal="'+esc(r.kode)+'">Koreksi modal</button></span></div>'}).join(''):'<div class="empty">Belum ada penjualan di bulan ini.</div>')+'</div></div></div>';
 }
 
 /* ---------- admin login ---------- */
@@ -1036,7 +1038,7 @@ function render(){
   document.body.classList.toggle('loginmode',locked);
   renderShell();
   document.getElementById('view').innerHTML=(S.netErr?'<div class="banner b-gold" role="status" style="color:var(--warn);margin-bottom:14px">'+esc(S.netErr)+'</div>':'')+(locked?vLogin():RENDER[S.view]());
-  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():S.qrisFor?qrisModalHtml():S.poster?posterHtml():'';restoreBanner();
+  document.getElementById('modal').innerHTML=S.receipt?receiptHtml():S.placed?placedHtml():S.qrisFor?qrisModalHtml():S.poster?posterHtml():S.remodal?remodalHtml():'';restoreBanner();
   document.getElementById('notif').innerHTML=notifHtml();
   if(fid){const el=document.getElementById(fid);if(el&&el!==document.activeElement){el.focus({preventScroll:true});try{if(s1!=null)el.setSelectionRange(s1,s2)}catch(e){}}}
 }
@@ -1230,7 +1232,7 @@ imgInput.addEventListener('change',async()=>{const f=imgInput.files&&imgInput.fi
   S.imgBusy=true;render();
   try{const data=await shrink(f);if(S.pf)S.pf.img=data}catch(err){toast('Foto tidak bisa dibaca. Coba file JPG atau PNG.')}
   S.imgBusy=false;imgInput.value='';render()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor||S.poster)){S.receipt=null;S.placed=null;S.qrisFor=null;closePoster();render()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.receipt||S.placed||S.qrisFor||S.poster||S.remodal)){S.receipt=null;S.placed=null;S.qrisFor=null;S.remodal=null;closePoster();render()}});
 
 function orderBody(lines,extra,hp){const its=hp?hp.items.map(l=>{const o={kode:l.kode,name:l.name,qty:l.qty,price:l.price,modal:l.modal};if(l.normal!==l.price){o.normal=l.normal;o.promoId=l.promoId}if(l.bonus)o.bonus=true;return o}):lines;const sub=sum(its,l=>l.qty*l.price),vd=hp&&hp.diskon.find(d=>d.tipe==='voucher');
   return Object.assign({createdAt:new Date().toISOString(),items:its,subtotal:sub,total:hp?hp.total:sub,diskon:hp?hp.diskon:[],voucher:vd?vd.voucher:'',modalTotal:sum(its,l=>l.qty*l.modal)},extra)}
@@ -1317,6 +1319,27 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-sied
   if(d.sidel){S.sidel=String(x.id);render();return}
   if(d.sidelok){S.sidel=null;const sisa=stockAfter(x.kode,-(+x.qty||0));if(sisa<0){const p=prod(x.kode);toast('Tidak bisa dihapus: '+(p?p.name:x.kode)+' sudah terjual, stok akan minus '+(-sisa));render();return}
     try{await deleteStockDoc(x.id);if(String(S.sf.editId)===String(x.id))S.sf.editId=null;toast('Catatan stok dihapus')}catch(err){}render()}});
+
+/* ---------- Koreksi modal transaksi lama ---------- */
+function remodalScope(R){return valid().filter(o=>(R.scope==='semua'||mk(o.createdAt)===R.month)&&(o.items||[]).some(i=>i.kode===R.kode))}
+function remodalHtml(){const R=S.remodal,os=remodalScope(R),nm=+R.modal||0;
+  const lama=sum(os,profit),baru=sum(os,o=>(+o.total||0)-sum(o.items||[],i=>(+i.qty||0)*(i.kode===R.kode?nm:(+i.modal||0)))),q=sum(os,o=>sum((o.items||[]).filter(i=>i.kode===R.kode),i=>+i.qty||0));
+  return '<div class="modal" role="dialog" aria-modal="true" aria-label="Koreksi modal"><form id="rmForm" class="box stack" style="gap:14px;max-width:460px">'+
+   '<div class="ch" style="margin:0"><div><h3>Koreksi modal</h3><p>'+esc(R.name)+'</p></div><button type="button" class="btn3" data-act="rmclose">Tutup</button></div>'+
+   '<label class="f">Modal yang benar per unit<input class="in num" id="rm-modal" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" data-bind="remodal.modal" data-live="1" value="'+esc(R.modal)+'" required></label>'+
+   '<div class="seg" role="radiogroup" aria-label="Transaksi yang diperbaiki">'+[['bulan','Transaksi '+mLabel(R.month)],['semua','Semua transaksi']].map(([v,t])=>'<button type="button" class="sg'+(R.scope===v?' on':'')+'" role="radio" aria-checked="'+(R.scope===v)+'" data-rmscope="'+v+'">'+esc(t)+'</button>').join('')+'</div>'+
+   '<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rm-set" data-bind="remodal.setProduct"'+(R.setProduct?' checked':'')+'> Simpan juga sebagai harga modal produk</label>'+
+   '<div class="banner b-lav" style="font-size:13px;display:flex;flex-direction:column;gap:4px"><span>'+os.length+' transaksi, '+q+' item akan diperbarui.</span><span>Untung transaksi itu: <b class="num">'+rp(lama)+'</b> → <b class="num">'+rp(baru)+'</b></span></div>'+
+   '<button class="btn" type="submit"'+(S.busy||!os.length?' disabled':'')+'>'+(S.busy?'Menyimpan…':'Perbaiki modal')+'</button></form></div>'}
+async function remodalDoc(kode,modal,month,setProduct){const r=await run(api('POST','/api/admin/products/'+encodeURIComponent(kode)+'/remodal',{modal,month,setProduct},true));await loadAdmin();return r}
+async function saveRemodal(){const R=S.remodal;if(!R)return;const m=Math.round(+R.modal);if(!Number.isFinite(m)||m<0||R.modal===''){toast('Isi modal yang benar');return}
+  S.busy=true;render();try{await remodalDoc(R.kode,m,R.scope==='semua'?null:R.month,!!R.setProduct);S.remodal=null;toast('Modal '+R.name+' diperbaiki')}catch(e){}S.busy=false;render()}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-remodal],[data-rmscope],[data-act="rmclose"]');if(!t)return;const d=t.dataset;
+  if(d.remodal){const p=prod(d.remodal)||{};const row=valid().flatMap(o=>(o.items||[]).filter(i=>i.kode===d.remodal))[0]||{};S.remodal={kode:d.remodal,name:p.name||row.name||d.remodal,modal:String(p.modal!=null?p.modal:(row.modal||'')),scope:'bulan',month:S.month,setProduct:true};render();setTimeout(()=>{const i=document.getElementById('rm-modal');if(i){i.focus();i.select()}},50);return}
+  if(!S.remodal)return;
+  if(d.rmscope){S.remodal.scope=d.rmscope;render();return}
+  if(d.act==='rmclose'){S.remodal=null;render()}});
+document.addEventListener('submit',e=>{if(e.target&&e.target.id==='rmForm'){e.preventDefault();e.stopPropagation();saveRemodal()}},true);
 
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
