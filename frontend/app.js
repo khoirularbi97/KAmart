@@ -735,6 +735,7 @@ function vRiwayat(){
         '<span class="av" style="background:'+avc(o.customerName)+'">'+esc((o.customerName||'?')[0])+'</span>'+
         '<span class="rhmain"><span class="rhtop"><b>'+esc(o.customerName||'Pembeli umum')+'</b><span class="num'+(st<0?' strike':'')+'">'+rp(o.total)+'</span></span>'+
         '<small>'+esc(o.code||'')+' · '+new Date(o.createdAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+' · '+(o.source==='online'?'Online':'Kasir')+'</small>'+
+        '<span class="rhitems">'+esc((o.items||[]).map(i=>i.qty+'× '+i.name+(i.bonus?' (bonus)':'')).join(', ')||'-')+'</span>'+
         '<span class="rhpills"><span class="pill-s '+(st<0?'ps-bad':stagePill(st))+'">'+stageText(st)+'</span>'+(st<0?'':'<span class="pill-s '+(o.paid?'ps-ok':'ps-warn')+'">'+esc(payLabel(o.pay))+(o.paid?' · lunas':' · belum')+'</span>')+'</span></span></button>'+
         (open?'<div class="rhdet">'+(o.items||[]).map(i=>'<div class="li"><span>'+i.qty+'× '+esc(i.name)+(i.bonus?' <small style="color:var(--ok);font-weight:700">bonus</small>':'')+'</span><span class="num">'+(i.bonus?'Gratis':rp((+i.qty||0)*(+i.price||0)))+'</span></div>').join('')+
           ((o.diskon||[]).length?sumRows({subtotal:o.subtotal==null?o.total:o.subtotal,diskon:o.diskon}):'')+'<div class="li" style="font-weight:700"><span>Total</span><span class="num">'+rp(o.total)+'</span></div>'+
