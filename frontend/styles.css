@@ -134,6 +134,7 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .kt{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .ktile{min-height:104px;border-radius:18px;padding:12px;border:2px solid transparent;background:#fff;box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;gap:6px}
 .ktile.on{border-color:var(--primary)}
+.ktile{position:relative;overflow:hidden}.ktile.habis{cursor:not-allowed;background:#FBF8FC}.ktile.habis small,.ktile.habis b,.ktile.habis .kimg{opacity:.55}.ktile.habis .kimg{filter:grayscale(.85)}.ktile .stamp{left:auto;top:8px;right:8px;transform:rotate(-8deg);font-size:13px;letter-spacing:2px;padding:0 7px;border-width:2px;border-radius:7px}.khabis{color:#D7263D;font-weight:700}
 .ktile small{font-size:11px;font-weight:700;color:var(--muted)}
 .ktile .n{min-width:24px;height:24px;border-radius:999px;background:var(--primary);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
 /* Mode tampilan admin: Otomatis / HP / Desktop */
