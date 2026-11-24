@@ -446,7 +446,7 @@ function vToko(){
   bannerHtml('<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</p></div>'+cupHtml()+'</section>')+
   '<div class="chips" id="katalog" role="group" aria-label="Kategori">'+cats.map(c=>'<button class="sg'+(S.cat===c?' on':'')+'" data-cat="'+esc(c)+'" aria-pressed="'+(S.cat===c)+'">'+esc(c)+'</button>').join('')+'</div>'+
   (shown.length?'<div class="mgrid">'+shown.map(p=>{const st=stockOf(p.kode),qq=S.cart[p.kode]||0,c=catInfo(p.cat).warna;
-    return '<article class="mc"><div class="ph b-'+c+'">'+promoBadge(p)+(p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'">':prodTile(p,true))+'</div><div class="nm">'+esc(p.name)+'</div><div class="st">'+(st>0?'Sisa '+st+' '+esc(p.unit||''):'Stok habis')+'</div><div class="qty">'+priceTag(p)+stepper(p.kode,qq,st,p.name)+'</div></article>'}).join('')+'</div>'
+    return '<article class="mc'+(st>0?'':' habis')+'"><div class="ph b-'+c+'">'+promoBadge(p)+(p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'">':prodTile(p,true))+(st>0?'':'<span class="stamp" aria-hidden="true">HABIS</span>')+'</div><div class="nm">'+esc(p.name)+'</div><div class="st">'+(st>0?'Sisa '+st+' '+esc(p.unit||''):'Stok habis')+'</div><div class="qty">'+priceTag(p)+stepper(p.kode,qq,st,p.name)+'</div></article>'}).join('')+'</div>'
     :'<div class="card empty">'+(q?'Tidak ada produk bernama "'+esc(S.q)+'".':'Belum ada produk yang dijual online.')+'</div>')+
   infoFooter()+'</div>';
 }
