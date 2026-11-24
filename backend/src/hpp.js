@@ -12,6 +12,7 @@ function hppTime(x) {
 }
 /* stockin: [{id,date,kode,qty,harga,createdAt}], orders: [{id,createdAt,stage,items:[{kode,qty}]}]
  * opts.until: hanya kejadian sebelum waktu ini (ms). opts.fallback: {kode: modal} untuk stok masuk tanpa harga.
+ * opts.adjust: penyesuaian stok opname [{id,date,kode,qty(+/-),modal,createdAt}]; tidak mengubah modal rata-rata.
  * Hasil: prod[kode] = {qty, avg, tanpaHarga}, jual[orderId][kode] = modal rata-rata saat terjual. */
 function hppReplay(stockin, orders, opts) {
   opts = opts || {};
@@ -28,11 +29,18 @@ function hppReplay(stockin, orders, opts) {
     if (!(t < until)) return;
     (o.items || []).forEach((i) => ev.push({ t, k: i.kode, q: Number(i.qty) || 0, masuk: 0, id: String(o.id) }));
   });
+  (opts.adjust || []).forEach((x) => {
+    const t = hppTime(x); const q = Number(x.qty) || 0;
+    if (t < until && q) ev.push({ t, k: x.kode, q, adj: 1, h: Number(x.modal) || 0, masuk: q > 0 ? 1 : 0, id: 'adj' + x.id });
+  });
   ev.sort((a, b) => a.t - b.t || b.masuk - a.masuk || a.id.localeCompare(b.id, undefined, { numeric: true }));
   const prod = {}; const jual = {};
   ev.forEach((e) => {
     const s = prod[e.k] || (prod[e.k] = { qty: 0, avg: null, tanpaHarga: 0 });
-    if (e.masuk) {
+    if (e.adj) {
+      if (e.q > 0 && s.avg == null) s.avg = e.h;
+      s.qty += e.q;
+    } else if (e.masuk) {
       let h = e.h;
       if (!(h > 0)) { s.tanpaHarga += 1; h = s.avg != null ? s.avg : (Number(fb[e.k]) || 0); }
       const q0 = Math.max(0, s.qty);

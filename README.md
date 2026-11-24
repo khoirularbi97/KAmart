@@ -253,6 +253,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | PUT | `/api/admin/expenses/:id` | admin | Ubah pengeluaran |
 | DELETE | `/api/admin/expenses/:id` | admin | Hapus pengeluaran |
 | POST | `/api/admin/hpp/rehitung` | admin | Samakan modal transaksi (per bulan) dengan modal rata-rata dari stok masuk |
+| POST | `/api/admin/opname` | admin | Simpan stok opname `{date, items:[{kode, fisik, alasan}]}`; selisih jadi penyesuaian stok |
+| DELETE | `/api/admin/opname/:batch` | admin | Batalkan satu opname (stok kembali) |
 | PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
 | POST | `/api/admin/customers` | admin | Daftarkan pelanggan |
 | POST | `/api/admin/orders` | admin | Transaksi kasir |
@@ -283,3 +285,11 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
   Jika ada selisih (modal transaksi lama diketik manual, stok masuk dicatat belakangan), tombol
   *Samakan modal transaksi* menghitung ulang modal tiap transaksi bulan itu dari stok masuk.
 - Saat server dinyalakan, modal semua produk dihitung ulang dari stok masuk (`src/hpp.js`; salinan identik di frontend).
+
+## Stok opname
+
+Menu **Stok → Stok opname**: isi jumlah fisik di rak (tombol *Sama* = cocok dengan sistem), pilih alasan untuk yang selisih
+(rusak/kedaluwarsa, hilang, dipakai sendiri, salah catat), lalu simpan. Selisih dicatat di tabel `adjustments`
+dengan modal rata-rata saat itu, dan stok = stok masuk − terjual ± penyesuaian.
+Di Rekap, susut opname mengurangi **untung bersih** dan muncul sebagai baris di kartu **Arus stok**.
+Riwayat opname bisa dilihat detailnya, dibatalkan, dan diekspor ke CSV.

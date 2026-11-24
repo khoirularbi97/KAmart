@@ -45,9 +45,10 @@ const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const int = (v) => (Number.isFinite(+v) ? Math.round(+v) : NaN);
 
 const PRODUCTS_SQL = `
-  SELECT p.*, (COALESCE(si.q, 0) - COALESCE(so.q, 0))::int AS stock
+  SELECT p.*, (COALESCE(si.q, 0) - COALESCE(so.q, 0) + COALESCE(aj.q, 0))::int AS stock
   FROM products p
   LEFT JOIN (SELECT kode, SUM(qty)::int AS q FROM stockin GROUP BY kode) si ON si.kode = p.kode
+  LEFT JOIN (SELECT kode, SUM(qty)::int AS q FROM adjustments GROUP BY kode) aj ON aj.kode = p.kode
   LEFT JOIN (
     SELECT it->>'kode' AS kode, SUM((it->>'qty')::int)::int AS q
     FROM orders o CROSS JOIN LATERAL jsonb_array_elements(o.items) it
@@ -79,6 +80,7 @@ const mapPublicOrder = (r) => {
   return o;
 };
 const mapCustomer = (r) => ({ id: String(r.id), name: r.name, line: r.line, wa: r.wa });
+const mapAdj = (r) => ({ id: String(r.id), batch: r.batch, date: r.date, kode: r.kode, qty: r.qty, sistem: r.sistem, modal: r.modal, alasan: r.alasan, createdAt: r.created_at });
 const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat, createdAt: r.created_at });
 
 /* Modal produk = rata-rata bergerak dari stok masuk (lihat hpp.js). kodes kosong = semua produk. */
@@ -89,9 +91,10 @@ async function recalcModal(q, kodes) {
   const os = await q.query(all ? 'SELECT id, created_at, stage, items FROM orders WHERE stage >= 0'
     : "SELECT id, created_at, stage, items FROM orders o WHERE stage >= 0 AND EXISTS (SELECT 1 FROM jsonb_array_elements(o.items) it WHERE it->>'kode' = ANY($1))", arg);
   const pr = await q.query('SELECT kode, modal FROM products' + (all ? '' : ' WHERE kode = ANY($1)'), arg);
+  const aj = await q.query('SELECT * FROM adjustments' + (all ? '' : ' WHERE kode = ANY($1)'), arg);
   const fb = {};
   pr.rows.forEach((r) => { fb[r.kode] = r.modal; });
-  const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb });
+  const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb, adjust: aj.rows.map(mapAdj) });
   for (const p of pr.rows) {
     const s = r.prod[p.kode];
     if (!s || s.avg == null) continue;
@@ -513,6 +516,7 @@ admin.get('/data', ah(async (req, res) => {
     stockin: s.rows.map(mapStock),
     master: master.get(),
     promos: await adminPromos(),
+    adjust: (await db.query('SELECT * FROM adjustments ORDER BY created_at DESC, id DESC LIMIT 5000')).rows.map(mapAdj),
     expenses: (await db.query('SELECT * FROM expenses ORDER BY date DESC, id DESC LIMIT 2000')).rows
       .map((x) => ({ id: String(x.id), date: x.date, ket: x.ket, jumlah: x.jumlah })),
   });
@@ -700,6 +704,61 @@ admin.post('/products/:kode/remodal', ah(async (req, res) => {
   res.json({ ok: true, updated });
 }));
 
+/* Stok opname: body { date, items: [{kode, fisik, alasan}] }.
+ * Selisih (fisik − stok sistem) dicatat sebagai penyesuaian dengan modal rata-rata saat ini. */
+const ALASAN = ['rusak', 'hilang', 'pakai', 'salah'];
+admin.post('/opname', ah(async (req, res) => {
+  const b = req.body || {};
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
+  if (!date) throw bad('Tanggal tidak valid.');
+  const items = Array.isArray(b.items) ? b.items.slice(0, 1000) : [];
+  if (!items.length) throw bad('Belum ada produk yang dihitung.');
+  const seen = new Set();
+  for (const i of items) {
+    i.kode = str(i.kode, 40); i.fisik = int(i.fisik);
+    if (!i.kode || seen.has(i.kode)) throw bad('Data produk tidak valid.');
+    seen.add(i.kode);
+    if (!Number.isInteger(i.fisik) || i.fisik < 0) throw bad('Stok fisik harus angka 0 atau lebih.');
+  }
+  const batch = 'OP' + Date.now().toString(36).toUpperCase();
+  const client = await db.pool.connect();
+  let n = 0;
+  try {
+    await client.query('BEGIN');
+    const kodes = items.map((i) => i.kode);
+    await client.query('SELECT kode FROM products WHERE kode = ANY($1) ORDER BY kode FOR UPDATE', [kodes]);
+    const cur = await client.query(PRODUCTS_SQL + ' WHERE p.kode = ANY($1)', [kodes]);
+    const by = {};
+    cur.rows.forEach((r) => { by[r.kode] = r; });
+    for (const i of items) {
+      const p = by[i.kode];
+      if (!p) throw bad('Produk ' + i.kode + ' tidak ditemukan.');
+      const diff = i.fisik - Number(p.stock);
+      if (!diff) continue;
+      const alasan = ALASAN.includes(i.alasan) ? i.alasan : '';
+      if (!alasan) throw bad('Pilih alasan selisih untuk ' + p.name + '.');
+      await client.query('INSERT INTO adjustments (batch, date, kode, qty, sistem, modal, alasan) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [batch, date, i.kode, diff, Number(p.stock), p.modal, alasan]);
+      n += 1;
+    }
+    if (n) await recalcModal(client, kodes);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  res.status(201).json({ ok: true, batch: n ? batch : null, adjusted: n });
+}));
+admin.delete('/opname/:batch', ah(async (req, res) => {
+  const batch = str(req.params.batch, 40);
+  const r = await db.query('DELETE FROM adjustments WHERE batch = $1 RETURNING kode', [batch]);
+  if (!r.rowCount) throw new HttpError(404, 'Opname tidak ditemukan.');
+  await recalcModal(db, [...new Set(r.rows.map((x) => x.kode))]);
+  res.json({ ok: true, removed: r.rowCount });
+}));
+
 /* Samakan modal transaksi (per bulan / semua) dengan modal rata-rata dari stok masuk saat barang terjual.
  * body: { month?: 'YYYY-MM' } */
 admin.post('/hpp/rehitung', ah(async (req, res) => {
@@ -712,9 +771,10 @@ admin.post('/hpp/rehitung', ah(async (req, res) => {
     const si = await client.query('SELECT * FROM stockin');
     const os = await client.query("SELECT id, created_at, stage, items, to_char(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS mo FROM orders WHERE stage >= 0");
     const pr = await client.query('SELECT kode, modal FROM products');
+    const aj = await client.query('SELECT * FROM adjustments');
     const fb = {};
     pr.rows.forEach((r) => { fb[r.kode] = r.modal; });
-    const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb });
+    const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb, adjust: aj.rows.map(mapAdj) });
     for (const o of os.rows) {
       if (month && o.mo !== month) continue;
       const m = r.jual[o.id] || {};

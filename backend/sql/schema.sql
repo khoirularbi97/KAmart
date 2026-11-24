@@ -118,3 +118,18 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS expenses_date ON expenses (date);
+
+-- Stok opname: penyesuaian stok (qty + lebih, - kurang). modal = modal rata-rata saat opname.
+CREATE TABLE IF NOT EXISTS adjustments (
+  id          SERIAL PRIMARY KEY,
+  batch       TEXT NOT NULL,
+  date        DATE NOT NULL,
+  kode        TEXT NOT NULL REFERENCES products(kode) ON UPDATE CASCADE,
+  qty         INTEGER NOT NULL CHECK (qty <> 0),
+  sistem      INTEGER NOT NULL DEFAULT 0,
+  modal       INTEGER NOT NULL DEFAULT 0,
+  alasan      TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS adjustments_kode ON adjustments (kode);
+CREATE INDEX IF NOT EXISTS adjustments_batch ON adjustments (batch);
