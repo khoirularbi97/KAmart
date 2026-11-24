@@ -252,6 +252,7 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | POST | `/api/admin/expenses` | admin | Catat pengeluaran operasional (tanggal, keterangan, jumlah) |
 | PUT | `/api/admin/expenses/:id` | admin | Ubah pengeluaran |
 | DELETE | `/api/admin/expenses/:id` | admin | Hapus pengeluaran |
+| POST | `/api/admin/hpp/rehitung` | admin | Samakan modal transaksi (per bulan) dengan modal rata-rata dari stok masuk |
 | PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
 | POST | `/api/admin/customers` | admin | Daftarkan pelanggan |
 | POST | `/api/admin/orders` | admin | Transaksi kasir |
@@ -274,4 +275,11 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 
 - **Untung kotor** = penjualan − modal barang terjual (modal dicatat saat transaksi).
 - **Untung bersih** = untung kotor − pengeluaran operasional bulan itu (dicatat di kartu *Pengeluaran operasional* di bawah halaman Rekap).
-- **Nilai sisa stok** = Σ stok sekarang × harga modal produk saat ini.
+- **Nilai sisa stok** = Σ sisa stok × modal rata-rata (posisi akhir bulan yang dipilih).
+- **Modal produk otomatis** memakai metode rata-rata bergerak (moving average): setiap stok masuk,
+  modal = (sisa stok × modal lama + jumlah masuk × harga beli) ÷ (sisa + jumlah masuk). Harga modal di form
+  produk hanya bisa diisi sebagai *modal awal* sebelum ada catatan stok masuk. Harga beli di Stok masuk wajib diisi.
+- Kartu **Arus stok** mengecek: stok awal bulan + belanja − modal barang terjual (HPP) = stok akhir.
+  Jika ada selisih (modal transaksi lama diketik manual, stok masuk dicatat belakangan), tombol
+  *Samakan modal transaksi* menghitung ulang modal tiap transaksi bulan itu dari stok masuk.
+- Saat server dinyalakan, modal semua produk dihitung ulang dari stok masuk (`src/hpp.js`; salinan identik di frontend).

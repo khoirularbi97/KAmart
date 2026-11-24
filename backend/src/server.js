@@ -9,6 +9,7 @@ const storage = require('./storage');
 const midtrans = require('./midtrans');
 const master = require('./master');
 const promo = require('./promo');
+const hpp = require('./hpp');
 
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -78,7 +79,26 @@ const mapPublicOrder = (r) => {
   return o;
 };
 const mapCustomer = (r) => ({ id: String(r.id), name: r.name, line: r.line, wa: r.wa });
-const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat });
+const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat, createdAt: r.created_at });
+
+/* Modal produk = rata-rata bergerak dari stok masuk (lihat hpp.js). kodes kosong = semua produk. */
+async function recalcModal(q, kodes) {
+  const all = !kodes;
+  const arg = all ? [] : [kodes];
+  const si = await q.query('SELECT * FROM stockin' + (all ? '' : ' WHERE kode = ANY($1)'), arg);
+  const os = await q.query(all ? 'SELECT id, created_at, stage, items FROM orders WHERE stage >= 0'
+    : "SELECT id, created_at, stage, items FROM orders o WHERE stage >= 0 AND EXISTS (SELECT 1 FROM jsonb_array_elements(o.items) it WHERE it->>'kode' = ANY($1))", arg);
+  const pr = await q.query('SELECT kode, modal FROM products' + (all ? '' : ' WHERE kode = ANY($1)'), arg);
+  const fb = {};
+  pr.rows.forEach((r) => { fb[r.kode] = r.modal; });
+  const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb });
+  for (const p of pr.rows) {
+    const s = r.prod[p.kode];
+    if (!s || s.avg == null) continue;
+    const m = Math.round(s.avg);
+    if (m !== p.modal) await q.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [p.kode, m]);
+  }
+}
 
 async function findCustomer(client, name) {
   const { rows } = await client.query('SELECT * FROM customers WHERE lower(name) = lower($1)', [name]);
@@ -594,7 +614,8 @@ admin.put('/products/:kode', ah(async (req, res) => {
   await db.query(
     `INSERT INTO products (kode, name, cat, unit, modal, jual, min_stock, online, img, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
-     ON CONFLICT (kode) DO UPDATE SET name=$2, cat=$3, unit=$4, modal=$5, jual=$6, min_stock=$7, online=$8, img=$9, updated_at=now()`,
+     ON CONFLICT (kode) DO UPDATE SET name=$2, cat=$3, unit=$4,
+       modal=CASE WHEN EXISTS (SELECT 1 FROM stockin s WHERE s.kode = $1) THEN products.modal ELSE $5 END, jual=$6, min_stock=$7, online=$8, img=$9, updated_at=now()`,
     [kode, name, cat, str(b.unit, 20) || 'pcs', modal, jual, min, online, img],
   );
   res.json({ ok: true });
@@ -606,11 +627,11 @@ admin.post('/stockin', ah(async (req, res) => {
   const kode = str(b.kode, 40);
   const qty = int(b.qty); const harga = int(b.harga);
   if (!Number.isInteger(qty) || qty < 1) throw bad('Jumlah harus 1 atau lebih.');
-  if (!Number.isInteger(harga) || harga < 0) throw bad('Harga beli tidak valid.');
+  if (!Number.isInteger(harga) || harga < 1) throw bad('Isi harga beli per unit.');
   const ex = await db.query('SELECT 1 FROM products WHERE kode = $1', [kode]);
   if (!ex.rowCount) throw bad('Produk tidak ditemukan.');
   await db.query('INSERT INTO stockin (date, kode, qty, harga, tempat) VALUES ($1,$2,$3,$4,$5)', [date, kode, qty, harga, str(b.tempat, 60)]);
-  if (b.updateModal && harga > 0) await db.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [kode, harga]);
+  await recalcModal(db, [kode]);
   res.status(201).json({ ok: true });
 }));
 
@@ -675,6 +696,48 @@ admin.post('/products/:kode/remodal', ah(async (req, res) => {
   } finally {
     client.release();
   }
+  await recalcModal(db, [kode]);
+  res.json({ ok: true, updated });
+}));
+
+/* Samakan modal transaksi (per bulan / semua) dengan modal rata-rata dari stok masuk saat barang terjual.
+ * body: { month?: 'YYYY-MM' } */
+admin.post('/hpp/rehitung', ah(async (req, res) => {
+  const month = /^\d{4}-\d{2}$/.test((req.body || {}).month || '') ? req.body.month : null;
+  const client = await db.pool.connect();
+  let updated = 0;
+  try {
+    await client.query('BEGIN');
+    await client.query('LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE');
+    const si = await client.query('SELECT * FROM stockin');
+    const os = await client.query("SELECT id, created_at, stage, items, to_char(created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') AS mo FROM orders WHERE stage >= 0");
+    const pr = await client.query('SELECT kode, modal FROM products');
+    const fb = {};
+    pr.rows.forEach((r) => { fb[r.kode] = r.modal; });
+    const r = hpp.hppReplay(si.rows.map(mapStock), os.rows.map((o) => ({ id: o.id, createdAt: o.created_at, stage: o.stage, items: o.items })), { fallback: fb });
+    for (const o of os.rows) {
+      if (month && o.mo !== month) continue;
+      const m = r.jual[o.id] || {};
+      let ch = false;
+      const items = (o.items || []).map((i) => {
+        if (m[i.kode] == null) return i;
+        const nm = Math.round(m[i.kode]);
+        if (nm === Number(i.modal)) return i;
+        ch = true;
+        return Object.assign({}, i, { modal: nm });
+      });
+      if (!ch) continue;
+      const modalTotal = items.reduce((t, i) => t + (Number(i.qty) || 0) * (Number(i.modal) || 0), 0);
+      await client.query('UPDATE orders SET items = $2, modal_total = $3 WHERE id = $1', [o.id, JSON.stringify(items), modalTotal]);
+      updated += 1;
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
   res.json({ ok: true, updated });
 }));
 
@@ -692,7 +755,7 @@ admin.put('/stockin/:id', ah(async (req, res) => {
   if (!Number.isInteger(id)) throw bad('Catatan tidak valid.');
   if (!date) throw bad('Tanggal tidak valid.');
   if (!Number.isInteger(qty) || qty < 1) throw bad('Jumlah harus 1 atau lebih.');
-  if (!Number.isInteger(harga) || harga < 0) throw bad('Harga beli tidak valid.');
+  if (!Number.isInteger(harga) || harga < 1) throw bad('Isi harga beli per unit.');
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
@@ -707,7 +770,7 @@ admin.put('/stockin/:id', ah(async (req, res) => {
     if (sisaLama < 0) throw bad('Stok ' + op.name + ' akan minus ' + (-sisaLama) + ' karena sudah terjual. Kurangi perubahan atau batalkan pesanannya dulu.');
     await client.query('UPDATE stockin SET date = $2, kode = $3, qty = $4, harga = $5, tempat = $6 WHERE id = $1',
       [id, date, kode, qty, harga, str(b.tempat, 60)]);
-    if (b.updateModal && harga > 0) await client.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [kode, harga]);
+    await recalcModal(client, [...new Set([old.kode, kode])]);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
@@ -730,6 +793,7 @@ admin.delete('/stockin/:id', ah(async (req, res) => {
     const op = await stockOfKode(client, old.kode);
     if (op && op.stock - old.qty < 0) throw bad('Tidak bisa dihapus: ' + op.name + ' sudah terjual, stok akan minus ' + (old.qty - op.stock) + '.');
     await client.query('DELETE FROM stockin WHERE id = $1', [id]);
+    await recalcModal(client, [old.kode]);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
@@ -776,6 +840,7 @@ admin.patch('/orders/:id', ah(async (req, res) => {
   if (!sets.length) throw bad('Tidak ada perubahan.');
   const r = await db.query('UPDATE orders SET ' + sets.join(', ') + ' WHERE id = $1 RETURNING *', vals);
   if (!r.rowCount) throw new HttpError(404, 'Pesanan tidak ditemukan.');
+  if (b.stage !== undefined) await recalcModal(db, [...new Set((r.rows[0].items || []).map((i) => i.kode))]).catch((e) => console.error('Hitung modal gagal:', e.message));
   res.json({ order: mapOrder(r.rows[0]) });
 }));
 
@@ -844,6 +909,8 @@ app.use((err, req, res, next) => {
         console.log('Foto ' + r.kode + ' dipindahkan.');
       } catch (e) { console.error('Pindah foto ' + r.kode + ' gagal:', e.message); }
     }
+    // Modal produk mengikuti rata-rata stok masuk.
+    await recalcModal(db, null).catch((e) => console.error('Hitung modal rata-rata gagal:', e.message));
     app.listen(PORT, () => console.log('KAmart API berjalan di port ' + PORT));
   } catch (e) {
     console.error('Gagal menyiapkan database:', e.message);
