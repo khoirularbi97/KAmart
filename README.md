@@ -293,3 +293,11 @@ Menu **Stok → Stok opname**: isi jumlah fisik di rak (tombol *Sama* = cocok de
 dengan modal rata-rata saat itu, dan stok = stok masuk − terjual ± penyesuaian.
 Di Rekap, susut opname mengurangi **untung bersih** dan muncul sebagai baris di kartu **Arus stok**.
 Riwayat opname bisa dilihat detailnya, dibatalkan, dan diekspor ke CSV.
+
+## Export Excel / PDF
+
+Setiap halaman admin punya tombol **Export** di kanan atas (juga di Rekap, Produk, Riwayat, dan Stok opname).
+Pilihan: **Excel (.xlsx)** semua tabel halaman itu (tiap tabel satu sheet, angka tetap angka dengan format Rupiah),
+**PDF** siap cetak (A4, otomatis landscape untuk tabel lebar, ada nomor halaman), dan **CSV** untuk tabel utama.
+Library dimuat dari CDN hanya saat dipakai: SheetJS `xlsx@0.18.5`, `jspdf@2.5.1`, `jspdf-autotable@3.8.2`.
+Export Stok opname menyertakan **Lembar hitung** kosong untuk dicetak dan diisi saat menghitung di rak.

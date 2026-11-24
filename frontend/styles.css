@@ -124,6 +124,8 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .bars span{font-size:11px;font-weight:700;color:#54496A}
 .empty{text-align:center;color:var(--muted);padding:22px 10px;font-size:13px}
 .modal{position:fixed;inset:0;background:rgba(43,33,64,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.xbtn{display:flex;gap:14px;align-items:center;text-align:left;padding:14px;border-radius:18px;border:1px solid #E6E0F2;background:#fff;cursor:pointer;font:inherit;color:inherit;width:100%}.xbtn:hover:not([disabled]){border-color:#B9A8F0;background:#FAF8FF}.xbtn[disabled]{opacity:.6;cursor:progress}.xbtn b{display:block;font-size:15px}.xbtn small{color:var(--muted);font-size:12px}.xbtn .tile{flex:none}
+.spin{width:20px;height:20px;border-radius:50%;border:3px solid rgba(255,255,255,.45);border-top-color:#fff;animation:xsp .8s linear infinite}@keyframes xsp{to{transform:rotate(360deg)}}
 .modal .box{background:#fff;border-radius:24px;padding:22px;width:min(420px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(16px + env(safe-area-inset-top,0px));background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;z-index:60;box-shadow:0 10px 24px rgba(0,0,0,.2);max-width:calc(100% - 32px)}
 .banner{border-radius:16px;padding:12px 14px;font-size:13px}
