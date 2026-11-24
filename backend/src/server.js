@@ -493,6 +493,8 @@ admin.get('/data', ah(async (req, res) => {
     stockin: s.rows.map(mapStock),
     master: master.get(),
     promos: await adminPromos(),
+    expenses: (await db.query('SELECT * FROM expenses ORDER BY date DESC, id DESC LIMIT 2000')).rows
+      .map((x) => ({ id: String(x.id), date: x.date, ket: x.ket, jumlah: x.jumlah })),
   });
 }));
 
@@ -610,6 +612,35 @@ admin.post('/stockin', ah(async (req, res) => {
   await db.query('INSERT INTO stockin (date, kode, qty, harga, tempat) VALUES ($1,$2,$3,$4,$5)', [date, kode, qty, harga, str(b.tempat, 60)]);
   if (b.updateModal && harga > 0) await db.query('UPDATE products SET modal = $2, updated_at = now() WHERE kode = $1', [kode, harga]);
   res.status(201).json({ ok: true });
+}));
+
+/* Pengeluaran operasional */
+function expenseBody(b) {
+  b = b || {};
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : null;
+  const ket = str(b.ket, 80);
+  const jumlah = int(b.jumlah);
+  if (!date) throw bad('Tanggal tidak valid.');
+  if (!ket) throw bad('Isi keterangan pengeluaran.');
+  if (!Number.isInteger(jumlah) || jumlah < 1) throw bad('Jumlah harus lebih dari 0.');
+  return { date, ket, jumlah };
+}
+admin.post('/expenses', ah(async (req, res) => {
+  const e = expenseBody(req.body);
+  await db.query('INSERT INTO expenses (date, ket, jumlah) VALUES ($1,$2,$3)', [e.date, e.ket, e.jumlah]);
+  res.status(201).json({ ok: true });
+}));
+admin.put('/expenses/:id', ah(async (req, res) => {
+  const e = expenseBody(req.body);
+  if (!Number.isInteger(int(req.params.id))) throw bad('Data tidak valid.');
+  const r = await db.query('UPDATE expenses SET date = $2, ket = $3, jumlah = $4 WHERE id = $1', [int(req.params.id), e.date, e.ket, e.jumlah]);
+  if (!r.rowCount) throw new HttpError(404, 'Pengeluaran tidak ditemukan.');
+  res.json({ ok: true });
+}));
+admin.delete('/expenses/:id', ah(async (req, res) => {
+  if (!Number.isInteger(int(req.params.id))) throw bad('Data tidak valid.');
+  await db.query('DELETE FROM expenses WHERE id = $1', [int(req.params.id)]);
+  res.json({ ok: true });
 }));
 
 /* Koreksi modal di transaksi yang sudah terjadi (mis. salah tulis modal).

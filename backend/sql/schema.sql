@@ -108,3 +108,13 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS subtotal INTEGER;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS diskon JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS voucher TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS orders_voucher ON orders (voucher) WHERE voucher <> '';
+
+-- Pengeluaran operasional (kantong plastik, bensin, dll.) untuk menghitung untung bersih.
+CREATE TABLE IF NOT EXISTS expenses (
+  id          SERIAL PRIMARY KEY,
+  date        DATE NOT NULL,
+  ket         TEXT NOT NULL,
+  jumlah      INTEGER NOT NULL CHECK (jumlah >= 0),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS expenses_date ON expenses (date);

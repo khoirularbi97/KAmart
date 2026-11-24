@@ -249,6 +249,9 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | PUT | `/api/admin/products/:kode` | admin | Tambah/ubah produk (termasuk foto) |
 | POST | `/api/admin/stockin` | admin | Catat stok masuk |
 | POST | `/api/admin/products/:kode/remodal` | admin | Koreksi modal produk di transaksi lama (per bulan atau semua) |
+| POST | `/api/admin/expenses` | admin | Catat pengeluaran operasional (tanggal, keterangan, jumlah) |
+| PUT | `/api/admin/expenses/:id` | admin | Ubah pengeluaran |
+| DELETE | `/api/admin/expenses/:id` | admin | Hapus pengeluaran |
 | PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
 | POST | `/api/admin/customers` | admin | Daftarkan pelanggan |
 | POST | `/api/admin/orders` | admin | Transaksi kasir |
@@ -265,3 +268,10 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 ## Data awal
 
 `backend/sql/seed.sql` berisi data dari file KAmart_Pencatatan: 9 produk, 7 pelanggan, 12 catatan stok masuk, dan 7 transaksi November 2026. Data ini hanya dimasukkan jika tabel produk masih kosong. Catatan: harga Pop Mie Kari (modal Rp30.000, jual Rp31.500) kemungkinan salah ketik; ubah lewat menu Produk setelah deploy.
+
+
+## Rekap: untung bersih & nilai sisa stok
+
+- **Untung kotor** = penjualan − modal barang terjual (modal dicatat saat transaksi).
+- **Untung bersih** = untung kotor − pengeluaran operasional bulan itu (dicatat di kartu *Pengeluaran operasional* di bawah halaman Rekap).
+- **Nilai sisa stok** = Σ stok sekarang × harga modal produk saat ini.

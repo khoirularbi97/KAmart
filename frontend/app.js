@@ -44,7 +44,7 @@ const avc=n=>AVC[[...String(n)].reduce((a,c)=>a+c.charCodeAt(0),0)%AVC.length];
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const ls={get(k,d){try{const v=localStorage.getItem('kamart:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('kamart:'+k,JSON.stringify(v))}catch(e){}}};
 
-const S={products:[],customers:[],orders:[],stockin:[],promos:[],loaded:{},db:null,offline:false,
+const S={products:[],customers:[],orders:[],stockin:[],promos:[],expenses:[],loaded:{},db:null,offline:false,
   view:'toko',cat:'Semua',cart:{},co:Object.assign({name:'',line:'',slot:'Istirahat 12.00',pay:'QRIS',note:''},ls.get('me',{})),
   k:{cart:{},buyer:'',method:'Tunai',cash:0},receipt:null,confirm:null,
   pf:null,sf:{date:new Date().toISOString().slice(0,10),kode:'',qty:'',harga:'',tempat:'',upd:true},
@@ -195,7 +195,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('[data-vapp
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&/-vin$/.test(e.target.id||'')){e.preventDefault();const b=document.querySelector('[data-vapply="'+e.target.id.replace(/-vin$/,'')+'"]');if(b)b.click()}});
 
 /* ---------- data layer ---------- */
-const COLS=['products','customers','orders','stockin','promos'];
+const COLS=['products','customers','orders','stockin','promos','expenses'];
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>{t.hidden=true},2600)}
 function dbErr(e){toast(e&&e.code==='quota_exceeded'?'Penyimpanan penuh. Hapus data lama dulu.':'Gagal menyimpan, coba lagi.')}
 const API=(window.KAMART_API_BASE||'').replace(/\/$/,'');
@@ -211,7 +211,7 @@ async function run(p,okMsg){try{const r=await p;if(okMsg)toast(okMsg);return r}c
 async function saveMaster(m,renames){const r=await run(api('PUT','/api/admin/master',{master:m,renames},true));S.master=r.master;if(r.moved)await loadAdmin();render();return r}
 async function loadPublic(){try{const r=await api('GET','/api/products');S.pub=r.products;if(r.master)S.master=r.master;S.pubPromos=r.promos||[];S.loaded.pub=true;S.netErr=navigator.onLine?'':'Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.'}catch(e){S.netErr=e.message}render()}
 async function loadMine(){const toks=ls.get('orders',[]);if(!toks.length){S.mine=[];return}try{const r=await api('POST','/api/orders/lookup',{tokens:toks});S.mine=r.orders;render()}catch(e){}}
-async function loadAdmin(){if(!S.token)return;try{const r=await api('GET','/api/admin/data',null,true);S.products=r.products;S.customers=r.customers;S.orders=r.orders;S.stockin=r.stockin;if(r.master)S.master=r.master;S.promos=r.promos||[];S.loaded.admin=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
+async function loadAdmin(){if(!S.token)return;try{const r=await api('GET','/api/admin/data',null,true);S.products=r.products;S.customers=r.customers;S.orders=r.orders;S.stockin=r.stockin;if(r.master)S.master=r.master;S.promos=r.promos||[];S.expenses=r.expenses||[];S.loaded.admin=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
 async function loadQueue(){try{const r=await api('GET','/api/orders/queue');S.queue=r.orders;S.loaded.queue=true}catch(e){}render()}
 async function checkReg(){const n=S.co.name.trim();if(!n){S.reg=false;render();return}try{const r=await api('GET','/api/customers/check?name='+encodeURIComponent(n));S.reg=!!r.registered}catch(e){}render()}
 
@@ -1003,16 +1003,18 @@ function vRekap(){
   const mo=S.month,list=v.filter(o=>mk(o.createdAt)===mo);
   const omzet=sum(list,o=>+o.total||0),untung=sum(list,profit),terima=sum(list.filter(o=>o.paid),o=>+o.total||0),kb=sum(list.filter(o=>!o.paid),o=>+o.total||0);
   const belanja=sum(S.stockin.filter(x=>String(x.date).slice(0,7)===mo),x=>(+x.qty||0)*(+x.harga||0));
+  const peng=sum((S.expenses||[]).filter(x=>String(x.date).slice(0,7)===mo),x=>+x.jumlah||0),bersih=untung-peng;
+  const ps=S.products.map(p=>({p,st:stockOf(p.kode)})),nilaiStok=sum(ps,x=>Math.max(0,x.st)*(+x.p.modal||0)),sisaQty=sum(ps,x=>Math.max(0,x.st)),restock=ps.filter(x=>x.st<=(+x.p.min||0)).length;
   const wk=[0,0,0,0,0];list.forEach(o=>{wk[Math.min(4,Math.floor((new Date(o.createdAt).getDate()-1)/7))]+=+o.total||0});
   const max=Math.max(1,...wk),g=['#C6B5FF,#7C69CF','#FFC1D6,#D9467C','#FFE09A,#E0901F','#BFD6FF,#4377DB','#CFC2FF,#6E5AC4'];
   const per={};list.forEach(o=>(o.items||[]).forEach(i=>{const r=per[i.kode]=per[i.kode]||{kode:i.kode,name:i.name,q:0,om:0,un:0,md:0};r.q+=+i.qty||0;r.om+=(+i.qty||0)*(+i.price||0);r.un+=(+i.qty||0)*((+i.price||0)-(+i.modal||0));r.md+=(+i.qty||0)*(+i.modal||0)}));
   const perA=Object.values(per).sort((a,b)=>b.om-a.om);
   return '<div class="stack"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><label class="f" style="flex-direction:row;align-items:center;gap:10px">Bulan<select class="in" id="r-month" data-bind="month" data-live="1" style="width:auto">'+months.map(m=>'<option value="'+m+'"'+(m===mo?' selected':'')+'>'+mLabel(m)+'</option>').join('')+'</select></label><button class="btn2" data-act="csv">'+ic('down',16)+'Unduh CSV</button></div>'+
-  '<div class="grid g4">'+[['lav','money','Penjualan',rp(omzet),list.length+' transaksi'],['gold','trophy','Untung kotor',rp(untung),omzet?'margin '+Math.round(untung/omzet*100)+'%':'–'],['blue','check','Uang diterima',rp(terima),'Belum dibayar '+rp(kb)],['pink','down','Belanja stok',rp(belanja),'dari catatan stok masuk']].map(s=>'<div class="stat b-'+s[0]+'"><div class="row"><span class="tile t-'+s[0]+'">'+ic(s[1],22)+'</span></div><span class="lb">'+s[2]+'</span><span class="vl num">'+s[3]+'</span><span class="sm">'+s[4]+'</span></div>').join('')+'</div>'+
+  '<div class="grid g3 rkstats">'+[['lav','money','Penjualan',rp(omzet),list.length+' transaksi'],['gold','trophy','Untung kotor',rp(untung),omzet?'margin '+Math.round(untung/omzet*100)+'%':'–'],['mint','chart','Untung bersih',(bersih<0?'−':'')+rp(Math.abs(bersih)),'kotor − pengeluaran '+rp(peng)],['blue','check','Uang diterima',rp(terima),'Belum dibayar '+rp(kb)],['pink','down','Belanja stok',rp(belanja),'dari catatan stok masuk'],['lav','box','Nilai sisa stok',rp(nilaiStok),'harga modal · '+sisaQty+' pcs · '+restock+' perlu restock']].map(s=>'<div class="stat b-'+s[0]+'"><div class="row"><span class="tile t-'+s[0]+'">'+ic(s[1],22)+'</span></div><span class="lb">'+s[2]+'</span><span class="vl num">'+s[3]+'</span><span class="sm">'+s[4]+'</span></div>').join('')+'</div>'+
   '<div class="grid g3"><div class="card"><div class="ch"><div><h3>Penjualan per minggu</h3><p>'+mLabel(mo)+'</p></div></div><div class="bars" role="img" aria-label="'+wk.map((x,i)=>'Minggu '+(i+1)+' '+rp(x)).join(', ')+'">'+wk.map((x,i)=>'<div><span class="num">'+(x?Math.round(x/1000)+'rb':'0')+'</span><b style="height:'+Math.round(x/max*120)+'px;background:linear-gradient(180deg,'+g[i]+')"></b><small>Mg '+(i+1)+'</small></div>').join('')+'</div></div>'+
   '<div class="card"><div class="ch"><div><h3>Per produk</h3><p>Jumlah, omzet, untung</p></div></div>'+(perA.length?perA.map(r=>{const am=r.q?Math.round(r.md/r.q):0,pm=(prod(r.kode)||{}).modal;
     return '<div class="li"><span style="min-width:0"><b>'+esc(r.name)+'</b><br><small style="color:var(--muted)">'+r.q+' terjual · modal '+rp(am)+'/unit</small>'+(pm!=null&&+pm!==am?'<br><small style="color:var(--warn)">Modal produk sekarang '+rp(pm)+'</small>':'')+'</span>'+
-    '<span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b class="num">'+rp(r.om)+'</b><small class="num" style="color:'+(r.un<0?'var(--bad)':'var(--ok)')+'">'+(r.un<0?'−':'+')+rp(Math.abs(r.un))+'</small><button type="button" class="btn3 sm" data-remodal="'+esc(r.kode)+'">Koreksi modal</button></span></div>'}).join(''):'<div class="empty">Belum ada penjualan di bulan ini.</div>')+'</div></div></div>';
+    '<span style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px"><b class="num">'+rp(r.om)+'</b><small class="num" style="color:'+(r.un<0?'var(--bad)':'var(--ok)')+'">'+(r.un<0?'−':'+')+rp(Math.abs(r.un))+'</small><button type="button" class="btn3 sm" data-remodal="'+esc(r.kode)+'">Koreksi modal</button></span></div>'}).join(''):'<div class="empty">Belum ada penjualan di bulan ini.</div>')+'</div></div>'+expenseCard(mo,peng)+'</div>';
 }
 
 /* ---------- admin login ---------- */
@@ -1340,6 +1342,29 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-remodal],[
   if(d.rmscope){S.remodal.scope=d.rmscope;render();return}
   if(d.act==='rmclose'){S.remodal=null;render()}});
 document.addEventListener('submit',e=>{if(e.target&&e.target.id==='rmForm'){e.preventDefault();e.stopPropagation();saveRemodal()}},true);
+
+/* ---------- Pengeluaran operasional (untung bersih) ---------- */
+function efInit(){if(!S.ef)S.ef={date:ymd(new Date()),ket:'',jumlah:'',editId:null};return S.ef}
+function expenseCard(mo,peng){const f=efInit(),rows=(S.expenses||[]).filter(x=>String(x.date).slice(0,7)===mo).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return '<div class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Pengeluaran operasional</h3><p>'+mLabel(mo)+': '+rp(peng)+' · mengurangi untung bersih</p></div>'+(f.editId?'<button type="button" class="btn3" data-act="efcancel">Batal ubah</button>':'')+'</div>'+
+   '<form id="efForm" class="exform"><label class="f">Tanggal<input class="in" type="date" id="ef-date" data-bind="ef.date" value="'+esc(f.date)+'" required></label>'+
+   '<label class="f exk">Keterangan<input class="in" id="ef-ket" data-bind="ef.ket" value="'+esc(f.ket)+'" maxlength="80" placeholder="Kantong plastik, bensin belanja, gas…" required></label>'+
+   '<label class="f">Jumlah (Rp)<input class="in num" id="ef-jml" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" data-bind="ef.jumlah" value="'+esc(f.jumlah)+'" required></label>'+
+   '<button class="btn" type="submit"'+(S.busy?' disabled':'')+'>'+(f.editId?'Simpan':'Tambah')+'</button></form>'+
+   (rows.length?'<div>'+rows.map(x=>{const id=esc(String(x.id)),cf=S.efdel===String(x.id);return '<div class="li sirow'+(String(f.editId)===String(x.id)?' on':'')+'"><span style="min-width:0"><b>'+esc(x.ket)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+'</small></span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num">'+rp(x.jumlah)+'</b><span style="display:flex;gap:6px"><button type="button" class="btn3 sm" data-efedit="'+id+'">Ubah</button>'+(cf?'<button type="button" class="btn3 sm dang" data-efdelok="'+id+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-efdel="'+id+'">Hapus</button>')+'</span></span></div>'}).join('')+'</div>'
+    :'<div class="empty" style="padding:12px">Belum ada pengeluaran di bulan ini. Untung bersih = untung kotor.</div>')+'</div>'}
+async function saveExpenseDoc(id,body){await run(id?api('PUT','/api/admin/expenses/'+encodeURIComponent(id),body,true):api('POST','/api/admin/expenses',body,true));await loadAdmin()}
+async function deleteExpenseDoc(id){await run(api('DELETE','/api/admin/expenses/'+encodeURIComponent(id),null,true));await loadAdmin()}
+async function saveExpense(){const f=efInit(),jumlah=Math.round(+f.jumlah||0),ket=String(f.ket||'').trim();
+  if(!f.date||!ket||jumlah<1){toast('Isi tanggal, keterangan, dan jumlah');return}
+  S.busy=true;render();try{await saveExpenseDoc(f.editId,{date:f.date,ket,jumlah});toast(f.editId?'Pengeluaran diperbarui':'Pengeluaran dicatat');S.ef=Object.assign({},f,{ket:'',jumlah:'',editId:null})}catch(e){}S.busy=false;render()}
+document.addEventListener('submit',e=>{if(e.target&&e.target.id==='efForm'){e.preventDefault();e.stopPropagation();saveExpense()}},true);
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-efedit],[data-efdel],[data-efdelok],[data-act="efcancel"]');if(!t)return;const d=t.dataset;
+  if(d.act==='efcancel'){S.ef=Object.assign({},efInit(),{ket:'',jumlah:'',editId:null});render();return}
+  const x=(S.expenses||[]).find(y=>String(y.id)===String(d.efedit||d.efdel||d.efdelok));if(!x)return;
+  if(d.efedit){S.efdel=null;S.ef={date:String(x.date).slice(0,10),ket:x.ket,jumlah:String(x.jumlah),editId:String(x.id)};render();const i=document.getElementById('ef-ket');if(i)i.scrollIntoView({block:'center'});return}
+  if(d.efdel){S.efdel=String(x.id);render();return}
+  if(d.efdelok){S.efdel=null;try{await deleteExpenseDoc(x.id);if(String(efInit().editId)===String(x.id))S.ef.editId=null;toast('Pengeluaran dihapus')}catch(err){}render()}});
 
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
