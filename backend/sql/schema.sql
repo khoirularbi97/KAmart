@@ -149,3 +149,7 @@ CREATE TABLE IF NOT EXISTS cashclose (
   catatan     TEXT NOT NULL DEFAULT '',
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Belanja stok dibayar dari laci kasir ('laci') atau uang lain ('').
+ALTER TABLE stockin ADD COLUMN IF NOT EXISTS sumber TEXT NOT NULL DEFAULT '';
+ALTER TABLE cashclose ADD COLUMN IF NOT EXISTS belanja INTEGER NOT NULL DEFAULT 0;

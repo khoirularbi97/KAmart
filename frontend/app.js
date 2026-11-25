@@ -48,7 +48,7 @@ const ls={get(k,d){try{const v=localStorage.getItem('kamart:'+k);return v==null?
 const S={products:[],customers:[],orders:[],stockin:[],promos:[],expenses:[],adjust:[],cashclose:[],loaded:{},db:null,offline:false,
   view:'toko',cat:'Semua',cart:{},co:Object.assign({name:'',line:'',slot:'Istirahat 12.00',pay:'QRIS',note:''},ls.get('me',{})),
   k:{cart:{},buyer:'',method:'Tunai',cash:0},receipt:null,confirm:null,
-  pf:null,sf:{date:new Date().toISOString().slice(0,10),kode:'',qty:'',harga:'',tempat:''},
+  pf:null,sf:{date:(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date()),kode:'',qty:'',harga:'',tempat:'',sumber:'laci'},
   xp:null,cf:{name:'',line:'',wa:''},month:mk(new Date()),kfilter:'Belum',lastPlaced:null,busy:false,q:'',qrisFor:null,qrisStatic:false,layout:ls.get('layout','auto'),mine:[],placed:null,placedDl:'',alerts:[],alerted:new Set(),ns:ls.get('ns',{sound:true,push:false}),
   token:ls.get('token',null),pub:[],mine:[],queue:[],reg:false,netErr:'',lg:{user:'',pass:'',err:''}};
 /* ---------- data master (bisa diubah di menu Kelola Master) ---------- */
@@ -1026,13 +1026,15 @@ function vStok(){
    '<label class="f">Produk<select class="in" id="s-kode" data-bind="sf.kode" data-live="1">'+list.map(p=>'<option value="'+esc(p.kode)+'"'+(f.kode===p.kode?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'+
    '<label class="f">Jumlah<input class="in num" id="s-qty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" required data-bind="sf.qty" data-live="1" value="'+esc(f.qty)+'"></label>'+
    '<label class="f">Harga beli / unit<input class="in num" id="s-harga" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-num="1" required data-bind="sf.harga" data-live="1" value="'+esc(f.harga)+'"></label>'+
-   '<label class="f" style="grid-column:1/-1">Tempat beli<input class="in" id="s-tempat" data-bind="sf.tempat" value="'+esc(f.tempat)+'" placeholder="Nama grosir / agen"></label></div>'+
+   '<label class="f" style="grid-column:1/-1">Tempat beli<input class="in" id="s-tempat" data-bind="sf.tempat" value="'+esc(f.tempat)+'" placeholder="Nama grosir / agen"></label>'+
+   '<div class="f" style="grid-column:1/-1"><span>Dibayar dari</span><div class="seg" role="radiogroup" aria-label="Dibayar dari">'+[['laci','Laci kasir'],['','Uang lain']].map(([v,t])=>'<button type="button" role="radio" class="sg'+((f.sumber||'')===v?' on':'')+'" aria-checked="'+((f.sumber||'')===v)+'" data-sfsrc="'+v+'">'+t+'</button>').join('')+'</div>'+
+   '<small style="color:var(--muted)">'+(f.sumber==='laci'?'Total belanja otomatis dikurangkan di Tutup kasir tanggal ini.':'Tidak memengaruhi uang di laci (mis. uang pribadi / transfer).')+'</small></div></div>'+
    '<small style="color:var(--muted)">Harga modal produk otomatis menjadi rata-rata dari sisa stok dan belanja ini.</small>'+
    '<div class="banner b-lav" style="display:flex;justify-content:space-between;font-weight:700"><span>Total belanja</span><span class="num">'+rp((+f.qty||0)*(+f.harga||0))+'</span></div>'+
    '<div><button class="btn" type="submit"'+(list.length&&!S.busy?'':' disabled')+'>'+(ed?'Simpan perubahan':'Simpan &amp; tambah stok')+'</button></div></form>'+
   '<div class="card"><div class="ch"><div><h3>Riwayat belanja</h3><p>'+mLabel(mo)+': '+rp(sum(S.stockin.filter(x=>String(x.date).slice(0,7)===mo),x=>(+x.qty||0)*(+x.harga||0)))+'</p></div></div>'+
    (rows.length?rows.map(x=>{const p=prod(x.kode),id=esc(String(x.id)),on=ed&&String(ed.id)===String(x.id),cf=S.sidel===String(x.id);
-     return '<div class="li sirow'+(on?' on':'')+'"><span style="min-width:0"><b>'+esc(p?p.name:x.kode)+' · +'+(+x.qty||0)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+(x.tempat?' · '+esc(x.tempat):'')+' · '+rp(x.harga)+'/unit</small></span>'+
+     return '<div class="li sirow'+(on?' on':'')+'"><span style="min-width:0"><b>'+esc(p?p.name:x.kode)+' · +'+(+x.qty||0)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+(x.tempat?' · '+esc(x.tempat):'')+' · '+rp(x.harga)+'/unit'+(x.sumber==='laci'?' · <span style="color:var(--primary-ink);font-weight:700">dari laci</span>':'')+'</small></span>'+
        '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num">'+rp((+x.qty||0)*(+x.harga||0))+'</b><span style="display:flex;gap:6px">'+
        '<button type="button" class="btn3 sm" data-siedit="'+id+'"'+(on?' disabled':'')+'>Ubah</button>'+(cf?'<button type="button" class="btn3 sm dang" data-sidelok="'+id+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-sidel="'+id+'">Hapus</button>')+'</span></span></div>'}).join('')+
      (all.length>rows.length?'<div style="text-align:center;padding-top:10px"><button type="button" class="btn2" data-act="simore">Tampilkan '+Math.min(40,all.length-rows.length)+' lagi</button></div>':'')
@@ -1331,7 +1333,7 @@ async function saveProduct(){
 async function saveStock(){
   const f=S.sf;const qty=+f.qty||0,harga=+f.harga||0;if(!f.kode||qty<=0){toast('Isi jumlah dulu');return}
   if(harga<1){toast('Isi harga beli per unit');return}
-  try{await run(api('POST','/api/admin/stockin',{date:f.date,kode:f.kode,qty,harga,tempat:String(f.tempat||'').trim()},true),'Stok bertambah '+qty);S.sf.qty='';await loadAdmin()}catch(e){}
+  try{await run(api('POST','/api/admin/stockin',{date:f.date,kode:f.kode,qty,harga,tempat:String(f.tempat||'').trim(),sumber:f.sumber==='laci'?'laci':''},true),'Stok bertambah '+qty);S.sf.qty='';await loadAdmin()}catch(e){}
 }
 async function saveCustomer(){
   const n=S.cf.name.trim();if(!n){toast('Isi nama pelanggan');return}
@@ -1372,7 +1374,7 @@ async function updateStock(){
   if(harga<1){toast('Isi harga beli per unit');return}
   const sisa=stockAfter(old.kode,-(+old.qty||0)+(old.kode===f.kode?qty:0));
   if(sisa<0){const p=prod(old.kode);toast('Stok '+(p?p.name:old.kode)+' akan minus '+(-sisa)+' karena sudah terjual');return}
-  const body={date:f.date,kode:f.kode,qty,harga,tempat:String(f.tempat||'').trim()};
+  const body={date:f.date,kode:f.kode,qty,harga,tempat:String(f.tempat||'').trim(),sumber:f.sumber==='laci'?'laci':''};
   S.busy=true;render();
   try{await updateStockDoc(old.id,body,[old.kode,f.kode]);
     S.sf=Object.assign({},S.sf,{editId:null,qty:''});toast('Catatan stok diperbarui')}catch(e){}
@@ -1383,7 +1385,7 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-sied
   if(d.act==='simore'){S.siLimit=(S.siLimit||40)+40;render();return}
   if(d.act==='sicancel'){S.sf=Object.assign({},S.sf,{editId:null,qty:''});render();return}
   const x=S.stockin.find(y=>String(y.id)===String(d.siedit||d.sidel||d.sidelok));if(!x)return;
-  if(d.siedit){S.sidel=null;S.sf=Object.assign({},S.sf,{editId:String(x.id),date:String(x.date).slice(0,10),kode:x.kode,qty:String(x.qty),harga:String(x.harga),tempat:x.tempat||''});render();window.scrollTo({top:0,behavior:'smooth'});return}
+  if(d.siedit){S.sidel=null;S.sf=Object.assign({},S.sf,{editId:String(x.id),date:String(x.date).slice(0,10),kode:x.kode,qty:String(x.qty),harga:String(x.harga),tempat:x.tempat||'',sumber:x.sumber||''});render();window.scrollTo({top:0,behavior:'smooth'});return}
   if(d.sidel){S.sidel=String(x.id);render();return}
   if(d.sidelok){S.sidel=null;const sisa=stockAfter(x.kode,-(+x.qty||0));if(sisa<0){const p=prod(x.kode);toast('Tidak bisa dihapus: '+(p?p.name:x.kode)+' sudah terjual, stok akan minus '+(-sisa));render();return}
     try{await deleteStockDoc(x.id);await syncModal([x.kode]);if(String(S.sf.editId)===String(x.id))S.sf.editId=null;toast('Catatan stok dihapus')}catch(err){}render()}});
@@ -1560,8 +1562,8 @@ function exportSpec(view){
       xSheet('Riwayat',xOrderCols.concat([['Waktu ambil'],['Catatan'],['Diskon','rp'],['Voucher']]),l.map(o=>xOrderRow(o).concat([o.slot||'',o.note||'',sum(o.diskon||[],d=>+d.nilai||0),o.voucher||''])),{total:[6,7,8,9,15]}),
       xKV('Ringkasan',[['Pesanan',l.length,'n'],['Dibatalkan',l.length-ok.length,'n'],['Omzet (tanpa batal)',sum(ok,o=>+o.total||0)],['Untung',sum(ok,profit)],['Belum dibayar',sum(ok.filter(o=>!o.paid),o=>+o.total||0)]])]}}
   if(view==='kasir'&&S.ktab==='tutup'){const h=(S.cashclose||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    return{file:'tutup-kasir-'+t,title:'Tutup Kasir',sub:'Per '+tglJam(now),sheets:[xSheet('Tutup kasir',[['Tanggal'],['Modal awal','rp'],['Penjualan tunai','rp'],['Pelunasan kasbon','rp'],['Uang keluar','rp'],['Seharusnya','rp'],['Dihitung','rp'],['Selisih','rp'],['Keterangan']],
-      h.map(x=>[xDate(String(x.date).slice(0,10)),+x.modal||0,+x.tunai||0,+x.kasbon||0,+x.keluar||0,+x.seharusnya||0,+x.fisik||0,+x.selisih||0,[x.ketKeluar,x.catatan].filter(Boolean).join(' · ')]),{total:[7]})]}}
+    return{file:'tutup-kasir-'+t,title:'Tutup Kasir',sub:'Per '+tglJam(now),sheets:[xSheet('Tutup kasir',[['Tanggal'],['Modal awal','rp'],['Penjualan tunai','rp'],['Pelunasan kasbon','rp'],['Belanja stok dari laci','rp'],['Uang keluar lain','rp'],['Seharusnya','rp'],['Dihitung','rp'],['Selisih','rp'],['Keterangan']],
+      h.map(x=>[xDate(String(x.date).slice(0,10)),+x.modal||0,+x.tunai||0,+x.kasbon||0,+x.belanja||0,+x.keluar||0,+x.seharusnya||0,+x.fisik||0,+x.selisih||0,[x.ketKeluar,x.catatan].filter(Boolean).join(' · ')]),{total:[8]})]}}
   if(view==='kasir'){const l=v.filter(o=>o.source==='kasir'&&sameDay(o.createdAt)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
     return{file:'kasir-'+t,title:'Transaksi Kasir',sub:'Hari ini, '+xDate(t),sheets:[
       xSheet('Transaksi kasir',[['Waktu'],['Kode'],['Pembeli'],['Barang'],['Total','rp'],['Untung','rp'],['Bayar'],['Status']],l.map(o=>[tglJam(o.createdAt),o.code||'',o.customerName,itemsText(o),+o.total||0,profit(o),payLabel(o.pay),o.paid?'Lunas':'Belum']),{total:[4,5]}),
@@ -1581,7 +1583,7 @@ function exportSpec(view){
           bs.flatMap(b=>b.rows.map(x=>{const p=prod(x.kode);return[xDate(String(x.date).slice(0,10)),b.batch,x.kode,p?p.name:x.kode,+x.sistem||0,(+x.sistem||0)+(+x.qty||0),+x.qty||0,+x.modal||0,(+x.qty||0)*(+x.modal||0),ALASAN[x.alasan]||x.alasan||'']})),{total:[6,8]})]}}
     const l=S.stockin.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));const r=hppReplay(S.stockin,S.orders,{fallback:modalFb(),adjust:S.adjust});
     return{file:'stok-masuk-'+t,title:'Stok Masuk',sub:'Per '+tglJam(now),sheets:[
-      xSheet('Stok masuk',[['Tanggal'],['Kode'],['Produk'],['Jumlah','n'],['Harga beli','rp'],['Total','rp'],['Tempat beli']],l.map(x=>{const p=prod(x.kode);return[xDate(String(x.date).slice(0,10)),x.kode,p?p.name:x.kode,+x.qty||0,+x.harga||0,(+x.qty||0)*(+x.harga||0),x.tempat||'']}),{total:[3,5]}),
+      xSheet('Stok masuk',[['Tanggal'],['Kode'],['Produk'],['Jumlah','n'],['Harga beli','rp'],['Total','rp'],['Tempat beli'],['Dibayar dari']],l.map(x=>{const p=prod(x.kode);return[xDate(String(x.date).slice(0,10)),x.kode,p?p.name:x.kode,+x.qty||0,+x.harga||0,(+x.qty||0)*(+x.harga||0),x.tempat||'',x.sumber==='laci'?'Laci kasir':'Uang lain']}),{total:[3,5]}),
       xSheet('Sisa stok',[['Kode'],['Produk'],['Sisa','n'],['Modal rata-rata','rp'],['Nilai','rp']],sortedProducts().map(p=>{const s=r.prod[p.kode],st=stockOf(p.kode),m=s&&s.avg!=null?Math.round(s.avg):+p.modal||0;return[p.kode,p.name,st,m,Math.max(0,st)*m]}),{total:[2,4]})]}}
   if(view==='kasbon'){const all=v.filter(o=>!o.paid&&(o.pay==='Kasbon'||o.stage===3)).sort((a,b)=>a.customerName.localeCompare(b.customerName)||a.createdAt.localeCompare(b.createdAt));
     const by={};all.forEach(o=>{const r=by[o.customerName]=by[o.customerName]||[o.customerName,o.customerLine||'',0,0,o.createdAt];r[2]++;r[3]+=+o.total||0;if(o.createdAt<r[4])r[4]=o.createdAt});
@@ -1692,16 +1694,18 @@ function ccInit(date){date=date||ymd(new Date());if(S.cc&&S.cc.date===date)retur
   return S.cc}
 function ccData(date){const ok=valid().filter(o=>o.paid&&o.stage>=0&&payDay(o)===date);
   return{tunaiL:ok.filter(o=>tipeOf(o)==='tunai'),kasbonL:ok.filter(o=>tipeOf(o)==='kasbon'),qrisL:ok.filter(o=>tipeOf(o)!=='tunai'&&tipeOf(o)!=='kasbon'),
-    belumL:valid().filter(o=>!o.paid&&tipeOf(o)==='tunai'&&ymd(new Date(o.createdAt))===date)}}
+    belumL:valid().filter(o=>!o.paid&&tipeOf(o)==='tunai'&&ymd(new Date(o.createdAt))===date),
+    belanjaL:S.stockin.filter(x=>x.sumber==='laci'&&String(x.date).slice(0,10)===date)}}
 function ccFisik(c){return sum(PECAHAN,p=>p*(+c.pec[p]||0))+(+c.pec.koin||0)}
-function ccCalc(){const c=ccInit(S.cc&&S.cc.date),d=ccData(c.date),tunai=sum(d.tunaiL,o=>+o.total||0),kasbon=c.kasbonTunai?sum(d.kasbonL,o=>+o.total||0):0,modal=+c.modal||0,keluar=+c.keluar||0;
-  const seharusnya=modal+tunai+kasbon-keluar,fisik=ccFisik(c),adaFisik=PECAHAN.some(p=>c.pec[p]!==undefined&&c.pec[p]!=='')||(c.pec.koin!==undefined&&c.pec.koin!=='');
-  return{c,d,tunai,kasbon,modal,keluar,seharusnya,fisik,adaFisik,selisih:fisik-seharusnya}}
+function ccCalc(){const c=ccInit(S.cc&&S.cc.date),d=ccData(c.date),tunai=sum(d.tunaiL,o=>+o.total||0),kasbon=c.kasbonTunai?sum(d.kasbonL,o=>+o.total||0):0,modal=+c.modal||0,keluar=+c.keluar||0,belanja=sum(d.belanjaL,x=>(+x.qty||0)*(+x.harga||0));
+  const seharusnya=modal+tunai+kasbon-keluar-belanja,fisik=ccFisik(c),adaFisik=PECAHAN.some(p=>c.pec[p]!==undefined&&c.pec[p]!=='')||(c.pec.koin!==undefined&&c.pec.koin!=='');
+  return{c,d,tunai,kasbon,modal,keluar,belanja,seharusnya,fisik,adaFisik,selisih:fisik-seharusnya}}
 function ccSummaryHtml(){const k=ccCalc(),row=(l,v,cls,sub)=>'<div class="arow'+(cls?' '+cls:'')+'"><span>'+l+(sub?'<br><small style="color:var(--muted);font-weight:400">'+sub+'</small>':'')+'</span><b class="num">'+v+'</b></div>';
   let h='<div class="arus">'+row('Modal awal laci',rp(k.modal),'','uang kembalian di awal hari')+
     row('+ Penjualan tunai lunas',rp(k.tunai),'',k.d.tunaiL.length+' transaksi (kasir & online)')+
     (k.d.kasbonL.length?row('+ Pelunasan kasbon',rp(k.kasbon),'',k.d.kasbonL.length+' pelunasan'+(k.c.kasbonTunai?' dibayar tunai':' tidak tunai, tidak dihitung')):'')+
-    (k.keluar?row('− Uang keluar dari laci',rp(k.keluar),'',esc(k.c.ketKeluar||'')):'')+
+    (k.d.belanjaL.length?row('− Belanja stok dari laci',rp(k.belanja),'',esc(k.d.belanjaL.map(x=>{const p=prod(x.kode);return (p?p.name:x.kode)+' ×'+x.qty}).join(', '))):'')+
+    (k.keluar?row('− Uang keluar lainnya',rp(k.keluar),'',esc(k.c.ketKeluar||'')):'')+
     row('= Seharusnya ada di laci',rp(k.seharusnya),'tot')+
     row('Uang dihitung',k.adaFisik?rp(k.fisik):'—')+
     (k.adaFisik?row('Selisih',(k.selisih<0?'−':k.selisih>0?'+':'')+rp(Math.abs(k.selisih)),k.selisih?'bad':'ok'):'')+'</div>';
@@ -1724,8 +1728,8 @@ function vTutupKasir(){const c=ccInit(S.cc&&S.cc.date),hist=(S.cashclose||[]).sl
   return kasirTabs()+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">'+
    '<div class="stack" style="gap:16px"><div class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Tutup kasir</h3><p>Hitung uang di laci, bandingkan dengan catatan</p></div>'+(c.saved?'<span class="pill-s ps-ok">Tersimpan</span>':'')+'</div>'+
     '<label class="f">Tanggal<input class="in" type="date" id="cc-date" value="'+esc(c.date)+'" max="'+ymd(new Date())+'"></label>'+
-    '<div class="grid g2" style="gap:10px"><label class="f">Modal awal laci (Rp)'+num('cc-modal','modal',c.modal)+'</label><label class="f">Uang keluar dari laci (Rp)'+num('cc-keluar','keluar',c.keluar)+'</label></div>'+
-    '<label class="f">Keterangan uang keluar<input class="in" id="cc-ket" data-cc="ketKeluar" value="'+esc(c.ketKeluar)+'" placeholder="mis. beli es batu, gas"></label>'+
+    '<div class="grid g2" style="gap:10px"><label class="f">Modal awal laci (Rp)'+num('cc-modal','modal',c.modal)+'</label><label class="f">Uang keluar lainnya (Rp)'+num('cc-keluar','keluar',c.keluar)+'</label></div>'+
+    '<label class="f">Keterangan uang keluar<input class="in" id="cc-ket" data-cc="ketKeluar" value="'+esc(c.ketKeluar)+'" placeholder="mis. beli es batu, gas (belanja stok tidak perlu, sudah otomatis)"></label>'+
     (ccData(c.date).kasbonL.length?'<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cc-kb" data-cck="1"'+(c.kasbonTunai?' checked':'')+'> Pelunasan kasbon hari ini dibayar tunai (masuk laci)</label>':'')+
     '<div><p class="lbl" style="margin:4px 0 8px;font-weight:700;font-size:13px">Hitung uang di laci</p><div class="pec">'+PECAHAN.map(p=>'<label class="pc"><span>'+rp(p).replace('Rp','')+'</span>'+num('cc-p'+p,'pec.'+p,c.pec[p],'lembar')+'<small id="cc-s'+p+'" class="num">'+(+c.pec[p]?rp(p*(+c.pec[p])):'')+'</small></label>').join('')+
      '<label class="pc"><span>Koin (Rp)</span>'+num('cc-koin','pec.koin',c.pec.koin,'total koin')+'<small></small></label></div></div>'+
@@ -1735,7 +1739,7 @@ function vTutupKasir(){const c=ccInit(S.cc&&S.cc.date),hist=(S.cashclose||[]).sl
     '<button type="button" class="btn" data-act="ccsave"'+(S.busy?' disabled':'')+'>'+(c.saved?'Perbarui tutup kasir':'Simpan tutup kasir')+'</button></div>'+
     '<div id="cc-add">'+ccAddHtml()+'</div>'+
     '<div class="card"><div class="ch"><div><h3>Riwayat tutup kasir</h3><p>'+hist.length+' hari tercatat</p></div></div>'+
-    (hist.length?hist.slice(0,S.ccLimit||14).map(x=>{const d=String(x.date).slice(0,10),cf=S.ccdel===d;return '<div class="li" style="align-items:center"><span><b>'+esc(tglPanjang(d))+'</b><br><small style="color:var(--muted)">seharusnya '+rp(x.seharusnya)+' · dihitung '+rp(x.fisik)+'</small></span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num" style="color:'+(x.selisih<0?'var(--bad)':x.selisih>0?'var(--warn)':'var(--ok)')+'">'+(x.selisih?(x.selisih<0?'−':'+')+rp(Math.abs(x.selisih)):'Pas')+'</b><span style="display:flex;gap:6px"><button type="button" class="btn3 sm" data-ccopen="'+d+'">Buka</button>'+(cf?'<button type="button" class="btn3 sm dang" data-ccdelok="'+d+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-ccdel="'+d+'">Hapus</button>')+'</span></span></div>'}).join('')+
+    (hist.length?hist.slice(0,S.ccLimit||14).map(x=>{const d=String(x.date).slice(0,10),cf=S.ccdel===d;return '<div class="li" style="align-items:center"><span><b>'+esc(tglPanjang(d))+'</b><br><small style="color:var(--muted)">seharusnya '+rp(x.seharusnya)+' · dihitung '+rp(x.fisik)+(+x.belanja?' · belanja '+rp(x.belanja):'')+'</small></span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num" style="color:'+(x.selisih<0?'var(--bad)':x.selisih>0?'var(--warn)':'var(--ok)')+'">'+(x.selisih?(x.selisih<0?'−':'+')+rp(Math.abs(x.selisih)):'Pas')+'</b><span style="display:flex;gap:6px"><button type="button" class="btn3 sm" data-ccopen="'+d+'">Buka</button>'+(cf?'<button type="button" class="btn3 sm dang" data-ccdelok="'+d+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-ccdel="'+d+'">Hapus</button>')+'</span></span></div>'}).join('')+
       (hist.length>(S.ccLimit||14)?'<div style="text-align:center;padding-top:10px"><button type="button" class="btn2" data-act="ccmore">Tampilkan lagi</button></div>':'')
      :'<div class="empty">Belum ada. Simpan tutup kasir setiap selesai jualan.</div>')+'</div></div></div>'}
 function tglPanjang(d){return new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
@@ -1744,7 +1748,7 @@ function ccRefresh(){const c=S.cc;if(!c)return;PECAHAN.forEach(p=>{const el=docu
 async function saveCloseDoc(date,body){await run(api('PUT','/api/admin/cashclose/'+date,body,true));await loadAdmin()}
 async function deleteCloseDoc(date){await run(api('DELETE','/api/admin/cashclose/'+date,null,true));await loadAdmin()}
 async function saveClose(){const k=ccCalc();if(!k.adaFisik){toast('Hitung dulu uang di laci');return}
-  const body={modal:k.modal,tunai:k.tunai,kasbon:k.kasbon,keluar:k.keluar,ketKeluar:String(k.c.ketKeluar||'').trim(),seharusnya:k.seharusnya,fisik:k.fisik,selisih:k.selisih,
+  const body={modal:k.modal,tunai:k.tunai,kasbon:k.kasbon,keluar:k.keluar,belanja:k.belanja,ketKeluar:String(k.c.ketKeluar||'').trim(),seharusnya:k.seharusnya,fisik:k.fisik,selisih:k.selisih,
     pecahan:Object.fromEntries(Object.entries(k.c.pec).filter(([,v])=>+v>0).map(([p,v])=>[p,+v])),catatan:String(k.c.catatan||'').trim()};
   S.busy=true;render();try{await saveCloseDoc(k.c.date,body);S.cc.saved=true;toast('Tutup kasir tersimpan'+(k.selisih?' · selisih '+(k.selisih<0?'−':'+')+rp(Math.abs(k.selisih)):' · pas'))}catch(e){}S.busy=false;render()}
 async function ccSaleDoc(items){const tunai=(pays('kasir').find(b=>b.tipe==='tunai')||{kode:'Tunai'}).kode;await run(api('POST','/api/admin/orders',{customerName:'',pay:tunai,cashExact:true,note:'Penjualan terlewat (tutup kasir)',items},true));await loadAdmin()}
@@ -1754,6 +1758,7 @@ document.addEventListener('input',e=>{const t=e.target;if(!t.dataset||!t.dataset
   if(k.startsWith('pec.'))S.cc.pec[k.slice(4)]=t.value;else S.cc[k]=t.value;ccRefresh()});
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='cc-date'){S.cc=null;ccInit(t.value||ymd(new Date()));render();return}
   if(t.dataset&&t.dataset.cck&&S.cc){S.cc.kasbonTunai=t.checked;ccRefresh()}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-sfsrc]');if(!t||!S.sf)return;S.sf.sumber=t.dataset.sfsrc;render()});
 document.addEventListener('click',async e=>{const t=e.target.closest('[data-ktab],[data-ccq],[data-ccopen],[data-ccdel],[data-ccdelok],[data-act="ccsave"],[data-act="ccsale"],[data-act="ccmore"]');if(!t)return;const d=t.dataset;
   if(d.ktab){S.ktab=d.ktab;render();return}
   if(d.ccq){const c=S.cc,p=prod(d.ccq);if(!c||!p)return;c.add[p.kode]=Math.max(0,Math.min(stockOf(p.kode),(c.add[p.kode]||0)+(+d.d)));ccRefresh();return}

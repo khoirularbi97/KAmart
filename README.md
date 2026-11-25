@@ -310,3 +310,5 @@ Menu **Kasir → Tutup kasir**. Rumus: **modal awal laci + penjualan tunai lunas
 Uang dihitung per pecahan (100rb … 1rb + koin), lalu selisih lebih/kurang ditampilkan dengan kemungkinan penyebabnya.
 Jika uang **lebih**, barang yang terjual tapi tidak diinput bisa dicatat sebagai penjualan tunai (stok & untung ikut benar).
 Selisih kas yang disimpan masuk ke **untung bersih** di Rekap (kurang = rugi, lebih = tambahan).
+Di form **Stok masuk** ada pilihan *Dibayar dari: Laci kasir / Uang lain*. Belanja dari laci otomatis dikurangkan di tutup kasir tanggal itu
+(baris *Belanja stok dari laci*). Belanja stok **tidak** dicatat di Pengeluaran operasional karena biayanya masuk lewat HPP saat barang terjual.

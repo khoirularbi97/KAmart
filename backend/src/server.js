@@ -80,10 +80,10 @@ const mapPublicOrder = (r) => {
   return o;
 };
 const mapCustomer = (r) => ({ id: String(r.id), name: r.name, line: r.line, wa: r.wa });
-const mapClose = (r) => ({ date: r.date, modal: r.modal, tunai: r.tunai, kasbon: r.kasbon, keluar: r.keluar, ketKeluar: r.ket_keluar,
+const mapClose = (r) => ({ date: r.date, modal: r.modal, tunai: r.tunai, kasbon: r.kasbon, keluar: r.keluar, belanja: r.belanja, ketKeluar: r.ket_keluar,
   seharusnya: r.seharusnya, fisik: r.fisik, selisih: r.selisih, pecahan: r.pecahan || {}, catatan: r.catatan, updatedAt: r.updated_at });
 const mapAdj = (r) => ({ id: String(r.id), batch: r.batch, date: r.date, kode: r.kode, qty: r.qty, sistem: r.sistem, modal: r.modal, alasan: r.alasan, createdAt: r.created_at });
-const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat, createdAt: r.created_at });
+const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat, sumber: r.sumber || '', createdAt: r.created_at });
 
 /* Modal produk = rata-rata bergerak dari stok masuk (lihat hpp.js). kodes kosong = semua produk. */
 async function recalcModal(q, kodes) {
@@ -637,7 +637,7 @@ admin.post('/stockin', ah(async (req, res) => {
   if (!Number.isInteger(harga) || harga < 1) throw bad('Isi harga beli per unit.');
   const ex = await db.query('SELECT 1 FROM products WHERE kode = $1', [kode]);
   if (!ex.rowCount) throw bad('Produk tidak ditemukan.');
-  await db.query('INSERT INTO stockin (date, kode, qty, harga, tempat) VALUES ($1,$2,$3,$4,$5)', [date, kode, qty, harga, str(b.tempat, 60)]);
+  await db.query('INSERT INTO stockin (date, kode, qty, harga, tempat, sumber) VALUES ($1,$2,$3,$4,$5,$6)', [date, kode, qty, harga, str(b.tempat, 60), b.sumber === 'laci' ? 'laci' : '']);
   await recalcModal(db, [kode]);
   res.status(201).json({ ok: true });
 }));
@@ -713,14 +713,14 @@ admin.put('/cashclose/:date', ah(async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw bad('Tanggal tidak valid.');
   const b = req.body || {};
   const n = (k) => { const v = int(b[k]); if (!Number.isInteger(v) || v < 0 || v > 1e9) throw bad('Angka ' + k + ' tidak valid.'); return v; };
-  const modal = n('modal'); const tunai = n('tunai'); const kasbon = n('kasbon'); const keluar = n('keluar'); const fisik = n('fisik');
-  const seharusnya = modal + tunai + kasbon - keluar;
+  const modal = n('modal'); const tunai = n('tunai'); const kasbon = n('kasbon'); const keluar = n('keluar'); const fisik = n('fisik'); const belanja = b.belanja == null ? 0 : n('belanja');
+  const seharusnya = modal + tunai + kasbon - keluar - belanja;
   const pec = {};
   Object.keys(b.pecahan || {}).slice(0, 20).forEach((k) => { const v = int(b.pecahan[k]); if (/^\d{1,6}$/.test(k) && Number.isInteger(v) && v > 0 && v < 1e6) pec[k] = v; });
-  const r = await db.query(`INSERT INTO cashclose (date, modal, tunai, kasbon, keluar, ket_keluar, seharusnya, fisik, selisih, pecahan, catatan, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
-     ON CONFLICT (date) DO UPDATE SET modal=$2, tunai=$3, kasbon=$4, keluar=$5, ket_keluar=$6, seharusnya=$7, fisik=$8, selisih=$9, pecahan=$10, catatan=$11, updated_at=now()
-     RETURNING *`, [date, modal, tunai, kasbon, keluar, str(b.ketKeluar, 140), seharusnya, fisik, fisik - seharusnya, JSON.stringify(pec), str(b.catatan, 200)]);
+  const r = await db.query(`INSERT INTO cashclose (date, modal, tunai, kasbon, keluar, ket_keluar, seharusnya, fisik, selisih, pecahan, catatan, belanja, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
+     ON CONFLICT (date) DO UPDATE SET modal=$2, tunai=$3, kasbon=$4, keluar=$5, ket_keluar=$6, seharusnya=$7, fisik=$8, selisih=$9, pecahan=$10, catatan=$11, belanja=$12, updated_at=now()
+     RETURNING *`, [date, modal, tunai, kasbon, keluar, str(b.ketKeluar, 140), seharusnya, fisik, fisik - seharusnya, JSON.stringify(pec), str(b.catatan, 200), belanja]);
   res.json({ close: mapClose(r.rows[0]) });
 }));
 admin.delete('/cashclose/:date', ah(async (req, res) => {
@@ -853,8 +853,8 @@ admin.put('/stockin/:id', ah(async (req, res) => {
     const op = old.kode === kode ? np : await stockOfKode(client, old.kode);
     const sisaLama = op.stock - old.qty + (old.kode === kode ? qty : 0);
     if (sisaLama < 0) throw bad('Stok ' + op.name + ' akan minus ' + (-sisaLama) + ' karena sudah terjual. Kurangi perubahan atau batalkan pesanannya dulu.');
-    await client.query('UPDATE stockin SET date = $2, kode = $3, qty = $4, harga = $5, tempat = $6 WHERE id = $1',
-      [id, date, kode, qty, harga, str(b.tempat, 60)]);
+    await client.query('UPDATE stockin SET date = $2, kode = $3, qty = $4, harga = $5, tempat = $6, sumber = $7 WHERE id = $1',
+      [id, date, kode, qty, harga, str(b.tempat, 60), b.sumber === 'laci' ? 'laci' : '']);
     await recalcModal(client, [...new Set([old.kode, kode])]);
     await client.query('COMMIT');
   } catch (e) {
