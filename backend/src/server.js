@@ -518,6 +518,8 @@ admin.get('/data', ah(async (req, res) => {
     stockin: s.rows.map(mapStock),
     master: master.get(),
     promos: await adminPromos(),
+    rutin: (await db.query("SELECT k FROM routine_done WHERE at > now() - interval '400 days'")).rows.map((x) => x.k),
+    pengingat: await getSetting('pengingat', PENGINGAT_DEF),
     cashclose: (await db.query('SELECT * FROM cashclose ORDER BY date DESC LIMIT 400')).rows.map(mapClose),
     adjust: (await db.query('SELECT * FROM adjustments ORDER BY created_at DESC, id DESC LIMIT 5000')).rows.map(mapAdj),
     expenses: (await db.query('SELECT * FROM expenses ORDER BY date DESC, id DESC LIMIT 2000')).rows
@@ -706,6 +708,49 @@ admin.post('/products/:kode/remodal', ah(async (req, res) => {
   await recalcModal(db, [kode]);
   res.json({ ok: true, updated });
 }));
+
+/* ---------- Checklist rutin & pengingat ---------- */
+const PENGINGAT_DEF = { kasir: true, jamKasir: '21:00', opname: true, bulanan: true, domain: '', vps: '' };
+async function getSetting(key, def) {
+  const r = await db.query('SELECT value FROM settings WHERE key = $1', [key]);
+  return Object.assign({}, def, r.rows[0] ? r.rows[0].value : {});
+}
+async function setSetting(key, value) {
+  await db.query('INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()', [key, JSON.stringify(value)]);
+}
+admin.put('/rutin', ah(async (req, res) => {
+  const k = str((req.body || {}).k, 80);
+  if (!/^[HWMQY]:[\w-]+\|[\w-]+$/.test(k)) throw bad('Data tidak valid.');
+  if (req.body.done) await db.query('INSERT INTO routine_done (k) VALUES ($1) ON CONFLICT (k) DO UPDATE SET at = now()', [k]);
+  else await db.query('DELETE FROM routine_done WHERE k = $1', [k]);
+  res.json({ ok: true });
+}));
+admin.put('/pengingat', ah(async (req, res) => {
+  const b = req.body || {}; const d = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+  const v = { kasir: b.kasir !== false, jamKasir: /^([01]\d|2[0-3]):[0-5]\d$/.test(b.jamKasir || '') ? b.jamKasir : '21:00',
+    opname: b.opname !== false, bulanan: b.bulanan !== false, domain: d(b.domain), vps: d(b.vps) };
+  await setSetting('pengingat', v);
+  res.json({ pengingat: v });
+}));
+/* Penjadwal sederhana (cek tiap menit, waktu WIB). Catatan kirim disimpan supaya tidak dobel setelah restart. */
+function wib() { const d = new Date(Date.now() + 7 * 3600e3); return { ymd: d.toISOString().slice(0, 10), ym: d.toISOString().slice(0, 7), hm: d.toISOString().slice(11, 16), day: d.getUTCDate(), last: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate() }; }
+async function cekPengingat() {
+  if (!PUSH_ON) return;
+  const p = await getSetting('pengingat', PENGINGAT_DEF); const log = await getSetting('pengingat_log', {}); const t = wib(); const kirim = [];
+  const once = (id, key, payload) => { if (log[id] !== key) { log[id] = key; kirim.push(payload); } };
+  if (p.kasir && t.hm >= p.jamKasir && t.hm < '23:59') {
+    const r = await db.query('SELECT 1 FROM cashclose WHERE date = $1', [t.ymd]);
+    if (!r.rowCount) once('kasir', t.ymd, { title: 'Belum tutup kasir hari ini', body: 'Hitung uang di laci dan cocokkan dengan catatan penjualan tunai.', tag: 'rutin-kasir', url: '/#kasir' });
+  }
+  if (p.opname && t.day === t.last && t.hm >= '19:00') once('opname', t.ym, { title: 'Akhir bulan: waktunya stok opname', body: 'Hitung semua produk di rak hari ini supaya Rekap bulan ini akurat.', tag: 'rutin-opname', url: '/#stok' });
+  if (p.bulanan && t.day === 1 && t.hm >= '08:00') once('bulanan', t.ym, { title: 'Rutinitas awal bulan', body: 'Cek Rekap bulan lalu (Arus stok seimbang?), export Excel/PDF, dan tinjau harga jual.', tag: 'rutin-bulanan', url: '/#rutin' });
+  for (const [id, nama] of [['domain', 'Domain scurebot.site'], ['vps', 'VPS Rumahweb']]) {
+    if (!p[id] || t.hm < '09:00') continue;
+    const sisa = Math.round((Date.parse(p[id]) - Date.parse(t.ymd)) / 864e5);
+    if ([30, 7, 1].includes(sisa)) once(id, p[id] + ':' + sisa, { title: nama + ' habis ' + sisa + ' hari lagi', body: 'Perpanjang sebelum ' + p[id] + ' supaya toko tetap online.', tag: 'rutin-' + id, url: '/#rutin' });
+  }
+  if (kirim.length) { await setSetting('pengingat_log', log); for (const k of kirim) await pushAdmins(k); }
+}
 
 /* Tutup kasir harian: hitung uang di laci vs catatan. Satu catatan per tanggal (disimpan ulang = diperbarui). */
 admin.put('/cashclose/:date', ah(async (req, res) => {
@@ -997,6 +1042,7 @@ app.use((err, req, res, next) => {
     // Modal produk mengikuti rata-rata stok masuk.
     await recalcModal(db, null).catch((e) => console.error('Hitung modal rata-rata gagal:', e.message));
     app.listen(PORT, () => console.log('KAmart API berjalan di port ' + PORT));
+    setInterval(() => cekPengingat().catch((e) => console.error('Pengingat gagal:', e.message)), 60e3);
   } catch (e) {
     console.error('Gagal menyiapkan database:', e.message);
     process.exit(1);

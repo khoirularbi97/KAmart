@@ -19,6 +19,7 @@ const VIEWS=[
   {id:'riwayat',t:'Riwayat',g:'Admin',ic:'inbox'},
   {id:'promo',t:'Promo',g:'Admin',ic:'money'},
   {id:'rekap',t:'Rekap',g:'Admin',ic:'chart'},
+  {id:'rutin',t:'Rutinitas',g:'Admin',ic:'check'},
   {id:'master',t:'Kelola Master',g:'Admin',ic:'box'}
 ];
 const IC={
@@ -45,7 +46,7 @@ const avc=n=>AVC[[...String(n)].reduce((a,c)=>a+c.charCodeAt(0),0)%AVC.length];
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const ls={get(k,d){try{const v=localStorage.getItem('kamart:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('kamart:'+k,JSON.stringify(v))}catch(e){}}};
 
-const S={products:[],customers:[],orders:[],stockin:[],promos:[],expenses:[],adjust:[],cashclose:[],loaded:{},db:null,offline:false,
+const S={products:[],customers:[],orders:[],stockin:[],promos:[],expenses:[],adjust:[],cashclose:[],rutin:[],pengingat:null,loaded:{},db:null,offline:false,
   view:'toko',cat:'Semua',cart:{},co:Object.assign({name:'',line:'',slot:'Istirahat 12.00',pay:'QRIS',note:''},ls.get('me',{})),
   k:{cart:{},buyer:'',method:'Tunai',cash:0},receipt:null,confirm:null,
   pf:null,sf:{date:(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date()),kode:'',qty:'',harga:'',tempat:'',sumber:'laci'},
@@ -255,7 +256,7 @@ document.addEventListener('click',async e=>{const a=e.target.closest('[data-vapp
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&/-vin$/.test(e.target.id||'')){e.preventDefault();const b=document.querySelector('[data-vapply="'+e.target.id.replace(/-vin$/,'')+'"]');if(b)b.click()}});
 
 /* ---------- data layer ---------- */
-const COLS=['products','customers','orders','stockin','promos','expenses','adjust','cashclose'];
+const COLS=['products','customers','orders','stockin','promos','expenses','adjust','cashclose','rutin'];
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>{t.hidden=true},2600)}
 function dbErr(e){toast(e&&e.code==='quota_exceeded'?'Penyimpanan penuh. Hapus data lama dulu.':'Gagal menyimpan, coba lagi.')}
 const API=(window.KAMART_API_BASE||'').replace(/\/$/,'');
@@ -271,7 +272,7 @@ async function run(p,okMsg){try{const r=await p;if(okMsg)toast(okMsg);return r}c
 async function saveMaster(m,renames){const r=await run(api('PUT','/api/admin/master',{master:m,renames},true));S.master=r.master;if(r.moved)await loadAdmin();render();return r}
 async function loadPublic(){try{const r=await api('GET','/api/products');S.pub=r.products;if(r.master)S.master=r.master;S.pubPromos=r.promos||[];S.loaded.pub=true;S.netErr=navigator.onLine?'':'Kamu sedang offline. Katalog yang tampil mungkin bukan yang terbaru.'}catch(e){S.netErr=e.message}render()}
 async function loadMine(){const toks=ls.get('orders',[]);if(!toks.length){S.mine=[];return}try{const r=await api('POST','/api/orders/lookup',{tokens:toks});S.mine=r.orders;render()}catch(e){}}
-async function loadAdmin(){if(!S.token)return;try{const r=await api('GET','/api/admin/data',null,true);S.products=r.products;S.customers=r.customers;S.orders=r.orders;S.stockin=r.stockin;if(r.master)S.master=r.master;S.promos=r.promos||[];S.expenses=r.expenses||[];S.adjust=r.adjust||[];S.cashclose=r.cashclose||[];S.loaded.admin=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
+async function loadAdmin(){if(!S.token)return;try{const r=await api('GET','/api/admin/data',null,true);S.products=r.products;S.customers=r.customers;S.orders=r.orders;S.stockin=r.stockin;if(r.master)S.master=r.master;S.promos=r.promos||[];S.expenses=r.expenses||[];S.adjust=r.adjust||[];S.cashclose=r.cashclose||[];S.rutin=r.rutin||[];S.pengingat=r.pengingat||null;S.loaded.admin=true;S.netErr=''}catch(e){S.netErr=e.message}render()}
 async function loadQueue(){try{const r=await api('GET','/api/orders/queue');S.queue=r.orders;S.loaded.queue=true}catch(e){}render()}
 async function checkReg(){const n=S.co.name.trim();if(!n){S.reg=false;render();return}try{const r=await api('GET','/api/customers/check?name='+encodeURIComponent(n));S.reg=!!r.registered}catch(e){}render()}
 
@@ -308,7 +309,7 @@ function renderShell(){
   const v=VIEWS.find(x=>x.id===S.view);
   document.getElementById('mbar').innerHTML='<span style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="" width="34" height="34" style="border-radius:50%"><b>KAmart</b></span><span style="font-size:12px;color:#EDE7FF">'+v.g+' · '+v.t+'</span>';
   const nNew=valid().filter(o=>o.stage===0).length;
-  const subs={promo:'Harga coret, beli X, minimal belanja, dan voucher',riwayat:'Semua pesanan online & kasir, bisa dicari dan diekspor',master:'Kategori, pembayaran, waktu ambil, dan lainnya',tentang:'Tentang KAmart',syarat:'Aturan berbelanja',refund:'Pembatalan dan pengembalian dana',privasi:'Perlindungan data pembeli',toko:'Pesan sekarang, ambil saat istirahat',dashboard:salam()+', Arbi',pesanan:'Alur pesanan dari Baru sampai Selesai',kasir:'Transaksi langsung di tempat',produk:'Harga, margin, dan sisa stok',stok:'Catat belanja dan stok opname',kasbon:'Kasbon dan pesanan yang belum dibayar',rekap:'Ringkasan per bulan'};
+  const subs={rutin:'Checklist harian sampai tahunan dan pengingat otomatis',promo:'Harga coret, beli X, minimal belanja, dan voucher',riwayat:'Semua pesanan online & kasir, bisa dicari dan diekspor',master:'Kategori, pembayaran, waktu ambil, dan lainnya',tentang:'Tentang KAmart',syarat:'Aturan berbelanja',refund:'Pembatalan dan pengembalian dana',privasi:'Perlindungan data pembeli',toko:'Pesan sekarang, ambil saat istirahat',dashboard:salam()+', Arbi',pesanan:'Alur pesanan dari Baru sampai Selesai',kasir:'Transaksi langsung di tempat',produk:'Harga, margin, dan sisa stok',stok:'Catat belanja dan stok opname',kasbon:'Kasbon dan pesanan yang belum dibayar',rekap:'Ringkasan per bulan'};
   document.getElementById('top').innerHTML='<div><h1>'+v.t+'</h1><div class="sub">'+subs[v.id]+'</div></div>'+
     '<div class="tbtns">'+(v.g==='Admin'?layoutSwitch()+'<button class="btn2" data-act="refresh" aria-label="Muat ulang data"'+(S.refreshing?' disabled':'')+'>'+(S.refreshing?'Memuat…':'↻ Muat ulang')+'</button>':'')+(v.g==='Admin'?'<button class="cbtn'+(unseenOrders().length?' ring-on':'')+'" data-go="pesanan" aria-label="Pesanan baru: '+nNew+'">'+ic('bell')+(nNew?'<em>'+nNew+'</em>':'')+'</button>':'')+
     (v.g==='Admin'&&isAuthed()?'<button class="btn2" data-act="xopen">'+ic('down',16)+'Export</button>':'')+'<button class="btn2" data-go="'+(v.g==='Admin'?'toko':'dashboard')+'">'+(v.g==='Admin'?'Lihat toko':'Masuk admin')+'</button>'+(v.g==='Admin'?'<button class="btn2" data-act="logout">Keluar</button>':'')+'</div>';
@@ -1097,7 +1098,7 @@ async function doLogin(){const L=S.lg;S.busy=true;L.err='';render();
   try{const r=await api('POST','/api/auth/login',{username:L.user.trim(),password:L.pass});S.token=r.token;ls.set('token',r.token);S.lg={user:'',pass:'',err:''};S.busy=false;toast('Selamat datang!');await loadAdmin()}
   catch(e){L.err=e.message;L.pass='';S.busy=false;render()}}
 
-const RENDER={promo:vPromo,riwayat:vRiwayat,master:vMaster,tentang:vTentang,syarat:vSyarat,refund:vRefund,privasi:vPrivasi,toko:vToko,keranjang:vKeranjang,pesananku:vPesananku,akun:vAkun,dashboard:vDashboard,pesanan:vPesanan,kasir:vKasir,produk:vProduk,stok:vStok,kasbon:vKasbon,rekap:vRekap};
+const RENDER={rutin:vRutin,promo:vPromo,riwayat:vRiwayat,master:vMaster,tentang:vTentang,syarat:vSyarat,refund:vRefund,privasi:vPrivasi,toko:vToko,keranjang:vKeranjang,pesananku:vPesananku,akun:vAkun,dashboard:vDashboard,pesanan:vPesanan,kasir:vKasir,produk:vProduk,stok:vStok,kasbon:vKasbon,rekap:vRekap};
 function render(){
   notifyNew();
   if(isAuthed()&&S.view==='pesanan'&&(S.loaded.orders||S.loaded.admin))markSeen();
@@ -1831,6 +1832,72 @@ document.addEventListener('mouseover',e=>{const t=e.target.closest&&e.target.clo
 document.addEventListener('click',e=>{const t=e.target.closest('.phit,[data-pr],[data-pm]');if(!t)return;
   if(t.classList.contains('phit')){perfShow(+t.dataset.pi);return}
   const s=perfInit();if(t.dataset.pr)s.r=t.dataset.pr;if(t.dataset.pm)s.m=t.dataset.pm;render()});
+
+/* ---------- Rutinitas: checklist harian s/d tahunan + pengingat ---------- */
+function isoWeek(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-day);const y0=new Date(Date.UTC(d.getUTCFullYear(),0,1));return d.getUTCFullYear()+'-W'+String(Math.ceil(((d-y0)/864e5+1)/7)).padStart(2,'0')}
+function rutinPeriods(){const d=new Date();return{H:ymd(d),W:isoWeek(d),M:mk(d),Q:d.getFullYear()+'-Q'+(Math.floor(d.getMonth()/3)+1),Y:String(d.getFullYear())}}
+const RUTIN=[
+ {p:'H',t:'Harian',sub:'±10 menit setelah tutup jualan',items:[
+  {id:'lunas',t:'Tandai lunas pesanan tunai yang uangnya sudah diterima',d:'Termasuk pesanan online. Lakukan sebelum tutup kasir.',go:'pesanan',auto:()=>!valid().some(o=>!o.paid&&o.stage>=0&&tipeOf(o)==='tunai'&&ymd(new Date(o.createdAt))===ymd(new Date()))?null:false},
+  {id:'stok',t:'Catat semua belanja di Stok masuk',d:'Isi harga beli dan pilih “Dibayar dari” dengan benar.',go:'stok'},
+  {id:'kasir',t:'Tutup kasir',d:'Hitung uang di laci per pecahan, cari penyebab selisih hari itu juga.',go:'kasir',tab:'tutup',auto:()=>(S.cashclose||[]).some(x=>String(x.date).slice(0,10)===ymd(new Date()))},
+  {id:'qris',t:'Cocokkan QRIS dengan mutasi DANA/Midtrans',d:'Total QRIS hari ini ada di halaman Tutup kasir.'},
+  {id:'biaya',t:'Catat pengeluaran operasional',d:'Plastik, gas, es batu, dan sejenisnya, di kartu Pengeluaran pada Rekap.',go:'rekap'},
+  {id:'restock',t:'Lihat stok menipis untuk daftar belanja besok',d:'Kartu “Stok menipis” di Dashboard.',go:'dashboard'}]},
+ {p:'W',t:'Mingguan',sub:'Sekali seminggu',items:[
+  {id:'opcepat',t:'Opname sebagian barang cepat laku',d:'Kopi, mie, rokok. Menu Stok → Stok opname.',go:'stok',tab:'opname'},
+  {id:'kasbon',t:'Tagih kasbon, mulai dari yang paling lama',d:'Halaman Belum Bayar.',go:'kasbon'},
+  {id:'performa',t:'Lihat performa 7 hari',d:'Hari paling ramai, online vs kasir, untung bersih.',go:'dashboard'},
+  {id:'promo',t:'Evaluasi promo yang berjalan',d:'Mana yang laku, mana yang sudah lewat masa berlakunya.',go:'promo'}]},
+ {p:'M',t:'Bulanan',sub:'Akhir / awal bulan',items:[
+  {id:'opname',t:'Stok opname semua produk',d:'Hari terakhir bulan. Cetak Lembar hitung lewat Export → PDF di tab Stok opname.',go:'stok',tab:'opname'},
+  {id:'arus',t:'Pastikan Arus stok di Rekap “Seimbang”',d:'Kalau ada selisih, cari penyebabnya dulu sebelum menekan “Samakan”.',go:'rekap'},
+  {id:'angka',t:'Pantau margin, susut %, dan selisih kas',d:'Susut idealnya di bawah 1–2% dari penjualan.',go:'rekap'},
+  {id:'export',t:'Export Rekap (Excel & PDF), simpan di Google Drive',d:'Sekaligus jadi cadangan data.',go:'rekap'},
+  {id:'harga',t:'Tinjau harga jual vs modal rata-rata',d:'Naikkan harga produk yang modalnya naik.',go:'produk'},
+  {id:'rapikan',t:'Rapikan produk & stok minimum',d:'Sembunyikan yang tidak laku 2–3 bulan.',go:'produk'},
+  {id:'server',t:'Perawatan server VPS',d:'sudo apt update && sudo apt upgrade, lalu pm2 restart kamart-api; cek pm2 logs kamart-api --lines 50 dan gembok HTTPS.'}]},
+ {p:'Q',t:'Tiga bulanan',sub:'Sekali per kuartal',items:[
+  {id:'neon',t:'Cek kuota & batas pemulihan database Neon',d:'Pastikan pemakaian masih jauh dari batas paket.'},
+  {id:'password',t:'Ganti password admin KAmart',d:'Di file .env VPS (ADMIN_PASSWORD), lalu restart.'},
+  {id:'cadangan',t:'Uji file cadangan',d:'Buka Excel hasil export dan pastikan datanya lengkap.'}]},
+ {p:'Y',t:'Tahunan',sub:'Sekali setahun',items:[
+  {id:'domain',t:'Perpanjang domain scurebot.site',d:'Isi tanggal habisnya di Pengingat di bawah supaya diingatkan otomatis.'},
+  {id:'vps',t:'Perpanjang VPS Rumahweb',d:'Isi tanggal habisnya di Pengingat di bawah.'},
+  {id:'midtrans',t:'Ganti Server Key Midtrans',d:'Buat kunci baru di dashboard Midtrans, perbarui .env di VPS.'},
+  {id:'tahunan',t:'Rekap tahunan',d:'Export Dashboard periode 12 bulan: omzet, untung bersih, produk terlaris.',go:'dashboard'},
+  {id:'pajak',t:'Siapkan total omzet tahunan untuk SPT',d:'Cek ketentuan pajak UMKM terbaru di kantor pajak/konsultan.'},
+  {id:'supplier',t:'Evaluasi supplier',d:'Bandingkan harga beli per tempat belanja dari export Stok masuk.',go:'stok'}]}];
+function rutinSet(){return new Set((S.rutin||[]).map(x=>typeof x==='string'?x:x.k))}
+function rutinState(sec,it,per,set){const a=it.auto?it.auto():null;if(a===true)return 'auto';return set.has(sec.p+':'+per[sec.p]+'|'+it.id)?'done':'todo'}
+function vRutin(){if(loading())return '<div class="card empty">Memuat…</div>';
+  const per=rutinPeriods(),set=rutinSet(),pg=Object.assign({kasir:true,jamKasir:'21:00',opname:true,bulanan:true,domain:'',vps:''},S.pengingat||{});
+  const label={H:tglPanjang(per.H),W:'Minggu ke-'+(+per.W.split('W')[1])+' '+per.W.slice(0,4),M:mLabel(per.M),Q:'Kuartal '+per.Q.slice(-1)+' '+per.Q.slice(0,4),Y:'Tahun '+per.Y};
+  const secs=RUTIN.map(sec=>{const st=sec.items.map(it=>rutinState(sec,it,per,set)),n=st.filter(x=>x!=='todo').length,pct=Math.round(n/sec.items.length*100);
+    return '<section class="card stack rsec" style="gap:10px"><div class="ch" style="margin:0"><div><h3>'+sec.t+'</h3><p>'+esc(label[sec.p])+' · '+sec.sub+'</p></div><span class="pill-s '+(n===sec.items.length?'ps-ok':'ps-warn')+'">'+n+'/'+sec.items.length+'</span></div>'+
+     '<div class="rbar" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100" aria-label="Progres '+sec.t.toLowerCase()+'"><i style="width:'+pct+'%"></i></div>'+
+     sec.items.map((it,i)=>{const s=st[i],k=sec.p+':'+per[sec.p]+'|'+it.id;return '<div class="ritem'+(s!=='todo'?' done':'')+'"><button type="button" class="rchk" data-rk="'+esc(k)+'" aria-pressed="'+(s!=='todo')+'"'+(s==='auto'?' disabled title="Tercentang otomatis dari data"':'')+' aria-label="'+esc(it.t)+'">'+(s!=='todo'?ic('check',16,3):'')+'</button>'+
+       '<span class="rtx"><b>'+esc(it.t)+'</b><small>'+esc(it.d)+(s==='auto'?' <em>· otomatis dari data</em>':'')+'</small></span>'+(it.go?'<button type="button" class="btn3 sm" data-rgo="'+it.go+'"'+(it.tab?' data-rtab="'+it.tab+'"':'')+'>Buka</button>':'')+'</div>'}).join('')+'</section>'}).join('');
+  const tg=(key,l,sub)=>'<label class="rtg"><input type="checkbox" data-pgk="'+key+'"'+(pg[key]?' checked':'')+'><span><b>'+l+'</b><small>'+sub+'</small></span></label>';
+  return '<div class="stack">'+notifSettings()+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">'+secs+
+   '<section class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Pengingat otomatis</h3><p>Dikirim sebagai notifikasi ke HP admin yang mengaktifkan notifikasi</p></div></div>'+
+    tg('kasir','Belum tutup kasir','Setiap hari, jika sampai jam di bawah belum ada tutup kasir')+
+    '<label class="f" style="max-width:180px">Jam pengingat tutup kasir<input class="in" type="time" data-pgv="jamKasir" value="'+esc(pg.jamKasir)+'"></label>'+
+    tg('opname','Stok opname akhir bulan','Hari terakhir setiap bulan, jam 19.00')+
+    tg('bulanan','Rutinitas awal bulan','Tanggal 1 jam 08.00: cek Rekap, export, tinjau harga')+
+    '<div class="grid g2" style="gap:10px"><label class="f">Domain habis tanggal<input class="in" type="date" data-pgv="domain" value="'+esc(pg.domain)+'"></label><label class="f">VPS habis tanggal<input class="in" type="date" data-pgv="vps" value="'+esc(pg.vps)+'"></label></div>'+
+    '<small style="color:var(--muted)">Pengingat domain dan VPS dikirim 30, 7, dan 1 hari sebelum tanggal habis.</small>'+
+    '<button type="button" class="btn" data-act="pgsave"'+(S.busy?' disabled':'')+'>Simpan pengingat</button></section></div></div>'}
+async function rutinDoc(k,done){await run(api('PUT','/api/admin/rutin',{k,done},true))}
+async function savePengingatDoc(v){const r=await run(api('PUT','/api/admin/pengingat',v,true));S.pengingat=r.pengingat}
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-rk],[data-rgo],[data-act="pgsave"]');if(!t)return;
+  if(t.dataset.rgo){if(t.dataset.rtab==='tutup')S.ktab='tutup';if(t.dataset.rtab==='opname')S.stab='opname';go(t.dataset.rgo);return}
+  if(t.dataset.rk){const k=t.dataset.rk,set=rutinSet(),done=!set.has(k);
+    S.rutin=done?[...(S.rutin||[]),k]:(S.rutin||[]).filter(x=>(typeof x==='string'?x:x.k)!==k);render();
+    try{await rutinDoc(k,done)}catch(err){toast('Gagal menyimpan centang')}return}
+  if(t.dataset.act==='pgsave'){const v=Object.assign({kasir:true,jamKasir:'21:00',opname:true,bulanan:true,domain:'',vps:''},S.pengingat||{});
+    document.querySelectorAll('[data-pgk]').forEach(i=>{v[i.dataset.pgk]=i.checked});document.querySelectorAll('[data-pgv]').forEach(i=>{v[i.dataset.pgv]=i.value});
+    S.busy=true;render();try{await savePengingatDoc(v);toast('Pengingat tersimpan')}catch(err){}S.busy=false;render()}});
 
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}

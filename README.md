@@ -255,6 +255,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | POST | `/api/admin/hpp/rehitung` | admin | Samakan modal transaksi (per bulan) dengan modal rata-rata dari stok masuk |
 | PUT | `/api/admin/cashclose/:date` | admin | Simpan/perbarui tutup kasir harian (modal, tunai, kasbon, keluar, fisik, pecahan) |
 | DELETE | `/api/admin/cashclose/:date` | admin | Hapus tutup kasir |
+| PUT | `/api/admin/rutin` | admin | Centang/hapus centang checklist rutin `{k:'H:2026-11-26|kasir', done}` |
+| PUT | `/api/admin/pengingat` | admin | Atur pengingat otomatis (tutup kasir, opname, awal bulan, domain, VPS) |
 | POST | `/api/admin/opname` | admin | Simpan stok opname `{date, items:[{kode, fisik, alasan}]}`; selisih jadi penyesuaian stok |
 | DELETE | `/api/admin/opname/:batch` | admin | Batalkan satu opname (stok kembali) |
 | PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
@@ -312,3 +314,12 @@ Jika uang **lebih**, barang yang terjual tapi tidak diinput bisa dicatat sebagai
 Selisih kas yang disimpan masuk ke **untung bersih** di Rekap (kurang = rugi, lebih = tambahan).
 Di form **Stok masuk** ada pilihan *Dibayar dari: Laci kasir / Uang lain*. Belanja dari laci otomatis dikurangkan di tutup kasir tanggal itu
 (baris *Belanja stok dari laci*). Belanja stok **tidak** dicatat di Pengeluaran operasional karena biayanya masuk lewat HPP saat barang terjual.
+
+## Rutinitas & pengingat
+
+Menu **Rutinitas**: checklist harian, mingguan, bulanan, tiga bulanan, dan tahunan. Centang tersimpan per periode
+(otomatis kosong lagi di hari/minggu/bulan berikutnya). Item *Tutup kasir* tercentang otomatis bila tutup kasir hari itu sudah disimpan.
+
+Pengingat dikirim server sebagai **Web Push** ke HP admin yang mengaktifkan notifikasi (butuh `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`):
+belum tutup kasir (jam bisa diatur, default 21.00 WIB), stok opname di hari terakhir bulan 19.00, rutinitas awal bulan tanggal 1 08.00,
+serta domain/VPS 30, 7, dan 1 hari sebelum tanggal habis. Server mengecek tiap menit; catatan kirim disimpan di `settings` supaya tidak dobel.

@@ -153,3 +153,9 @@ CREATE TABLE IF NOT EXISTS cashclose (
 -- Belanja stok dibayar dari laci kasir ('laci') atau uang lain ('').
 ALTER TABLE stockin ADD COLUMN IF NOT EXISTS sumber TEXT NOT NULL DEFAULT '';
 ALTER TABLE cashclose ADD COLUMN IF NOT EXISTS belanja INTEGER NOT NULL DEFAULT 0;
+
+-- Checklist rutin: k = '<periode>|<item>' (mis. 'H:2026-11-26|kasir'). Ada baris = sudah dicentang.
+CREATE TABLE IF NOT EXISTS routine_done (
+  k   TEXT PRIMARY KEY,
+  at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
