@@ -133,3 +133,19 @@ CREATE TABLE IF NOT EXISTS adjustments (
 );
 CREATE INDEX IF NOT EXISTS adjustments_kode ON adjustments (kode);
 CREATE INDEX IF NOT EXISTS adjustments_batch ON adjustments (batch);
+
+-- Tutup kasir: uang di laci vs catatan penjualan tunai, satu baris per hari.
+CREATE TABLE IF NOT EXISTS cashclose (
+  date        DATE PRIMARY KEY,
+  modal       INTEGER NOT NULL DEFAULT 0,
+  tunai       INTEGER NOT NULL DEFAULT 0,
+  kasbon      INTEGER NOT NULL DEFAULT 0,
+  keluar      INTEGER NOT NULL DEFAULT 0,
+  ket_keluar  TEXT NOT NULL DEFAULT '',
+  seharusnya  INTEGER NOT NULL DEFAULT 0,
+  fisik       INTEGER NOT NULL DEFAULT 0,
+  selisih     INTEGER NOT NULL DEFAULT 0,
+  pecahan     JSONB NOT NULL DEFAULT '{}',
+  catatan     TEXT NOT NULL DEFAULT '',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);

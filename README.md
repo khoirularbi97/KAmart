@@ -253,6 +253,8 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | PUT | `/api/admin/expenses/:id` | admin | Ubah pengeluaran |
 | DELETE | `/api/admin/expenses/:id` | admin | Hapus pengeluaran |
 | POST | `/api/admin/hpp/rehitung` | admin | Samakan modal transaksi (per bulan) dengan modal rata-rata dari stok masuk |
+| PUT | `/api/admin/cashclose/:date` | admin | Simpan/perbarui tutup kasir harian (modal, tunai, kasbon, keluar, fisik, pecahan) |
+| DELETE | `/api/admin/cashclose/:date` | admin | Hapus tutup kasir |
 | POST | `/api/admin/opname` | admin | Simpan stok opname `{date, items:[{kode, fisik, alasan}]}`; selisih jadi penyesuaian stok |
 | DELETE | `/api/admin/opname/:batch` | admin | Batalkan satu opname (stok kembali) |
 | PUT/DELETE | `/api/admin/stockin/:id` | admin | Ubah / hapus catatan stok masuk (ditolak jika stok jadi minus) |
@@ -301,3 +303,10 @@ Pilihan: **Excel (.xlsx)** semua tabel halaman itu (tiap tabel satu sheet, angka
 **PDF** siap cetak (A4, otomatis landscape untuk tabel lebar, ada nomor halaman), dan **CSV** untuk tabel utama.
 Library dimuat dari CDN hanya saat dipakai: SheetJS `xlsx@0.18.5`, `jspdf@2.5.1`, `jspdf-autotable@3.8.2`.
 Export Stok opname menyertakan **Lembar hitung** kosong untuk dicetak dan diisi saat menghitung di rak.
+
+## Tutup kasir
+
+Menu **Kasir → Tutup kasir**. Rumus: **modal awal laci + penjualan tunai lunas hari itu + pelunasan kasbon tunai − uang keluar = seharusnya ada di laci**.
+Uang dihitung per pecahan (100rb … 1rb + koin), lalu selisih lebih/kurang ditampilkan dengan kemungkinan penyebabnya.
+Jika uang **lebih**, barang yang terjual tapi tidak diinput bisa dicatat sebagai penjualan tunai (stok & untung ikut benar).
+Selisih kas yang disimpan masuk ke **untung bersih** di Rekap (kurang = rugi, lebih = tambahan).

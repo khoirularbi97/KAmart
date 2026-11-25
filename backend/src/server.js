@@ -80,6 +80,8 @@ const mapPublicOrder = (r) => {
   return o;
 };
 const mapCustomer = (r) => ({ id: String(r.id), name: r.name, line: r.line, wa: r.wa });
+const mapClose = (r) => ({ date: r.date, modal: r.modal, tunai: r.tunai, kasbon: r.kasbon, keluar: r.keluar, ketKeluar: r.ket_keluar,
+  seharusnya: r.seharusnya, fisik: r.fisik, selisih: r.selisih, pecahan: r.pecahan || {}, catatan: r.catatan, updatedAt: r.updated_at });
 const mapAdj = (r) => ({ id: String(r.id), batch: r.batch, date: r.date, kode: r.kode, qty: r.qty, sistem: r.sistem, modal: r.modal, alasan: r.alasan, createdAt: r.created_at });
 const mapStock = (r) => ({ id: String(r.id), date: r.date, kode: r.kode, qty: r.qty, harga: r.harga, tempat: r.tempat, createdAt: r.created_at });
 
@@ -146,7 +148,7 @@ async function loadPromos(q) {
 }
 const rpTxt = (n) => 'Rp' + Number(n).toLocaleString('id-ID');
 
-async function createOrder({ items, source, customerName, customerLine, pay, slot, note, cashIn, allowHidden, voucher }) {
+async function createOrder({ items, source, customerName, customerLine, pay, slot, note, cashIn, cashExact, allowHidden, voucher }) {
   if (!Array.isArray(items) || items.length === 0) throw bad('Keranjang masih kosong.');
   if (items.length > 30) throw bad('Terlalu banyak jenis barang dalam satu pesanan.');
   const qtyByKode = new Map();
@@ -225,7 +227,7 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
     let cash = null;
     let change = null;
     if (source === 'kasir' && pay === 'Tunai') {
-      cash = int(cashIn);
+      cash = cashExact ? total : int(cashIn);
       if (!Number.isInteger(cash) || cash < total) throw bad('Uang diterima kurang dari total.');
       change = cash - total;
     }
@@ -516,6 +518,7 @@ admin.get('/data', ah(async (req, res) => {
     stockin: s.rows.map(mapStock),
     master: master.get(),
     promos: await adminPromos(),
+    cashclose: (await db.query('SELECT * FROM cashclose ORDER BY date DESC LIMIT 400')).rows.map(mapClose),
     adjust: (await db.query('SELECT * FROM adjustments ORDER BY created_at DESC, id DESC LIMIT 5000')).rows.map(mapAdj),
     expenses: (await db.query('SELECT * FROM expenses ORDER BY date DESC, id DESC LIMIT 2000')).rows
       .map((x) => ({ id: String(x.id), date: x.date, ket: x.ket, jumlah: x.jumlah })),
@@ -704,6 +707,28 @@ admin.post('/products/:kode/remodal', ah(async (req, res) => {
   res.json({ ok: true, updated });
 }));
 
+/* Tutup kasir harian: hitung uang di laci vs catatan. Satu catatan per tanggal (disimpan ulang = diperbarui). */
+admin.put('/cashclose/:date', ah(async (req, res) => {
+  const date = req.params.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw bad('Tanggal tidak valid.');
+  const b = req.body || {};
+  const n = (k) => { const v = int(b[k]); if (!Number.isInteger(v) || v < 0 || v > 1e9) throw bad('Angka ' + k + ' tidak valid.'); return v; };
+  const modal = n('modal'); const tunai = n('tunai'); const kasbon = n('kasbon'); const keluar = n('keluar'); const fisik = n('fisik');
+  const seharusnya = modal + tunai + kasbon - keluar;
+  const pec = {};
+  Object.keys(b.pecahan || {}).slice(0, 20).forEach((k) => { const v = int(b.pecahan[k]); if (/^\d{1,6}$/.test(k) && Number.isInteger(v) && v > 0 && v < 1e6) pec[k] = v; });
+  const r = await db.query(`INSERT INTO cashclose (date, modal, tunai, kasbon, keluar, ket_keluar, seharusnya, fisik, selisih, pecahan, catatan, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+     ON CONFLICT (date) DO UPDATE SET modal=$2, tunai=$3, kasbon=$4, keluar=$5, ket_keluar=$6, seharusnya=$7, fisik=$8, selisih=$9, pecahan=$10, catatan=$11, updated_at=now()
+     RETURNING *`, [date, modal, tunai, kasbon, keluar, str(b.ketKeluar, 140), seharusnya, fisik, fisik - seharusnya, JSON.stringify(pec), str(b.catatan, 200)]);
+  res.json({ close: mapClose(r.rows[0]) });
+}));
+admin.delete('/cashclose/:date', ah(async (req, res) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) throw bad('Tanggal tidak valid.');
+  await db.query('DELETE FROM cashclose WHERE date = $1', [req.params.date]);
+  res.json({ ok: true });
+}));
+
 /* Stok opname: body { date, items: [{kode, fisik, alasan}] }.
  * Selisih (fisik − stok sistem) dicatat sebagai penyesuaian dengan modal rata-rata saat ini. */
 const ALASAN = ['rusak', 'hilang', 'pakai', 'salah'];
@@ -883,7 +908,7 @@ admin.post('/orders', ah(async (req, res) => {
   const c = buyer ? await findCustomer(db, buyer) : null;
   const { row } = await createOrder({
     items: b.items, source: 'kasir', customerName: c ? c.name : 'Pembeli umum', customerLine: c ? c.line : '',
-    pay: b.pay, slot: 'Kasir', note: '', cashIn: b.cashIn, allowHidden: true, voucher: b.voucher,
+    pay: b.pay, slot: 'Kasir', note: str(b.note, 140), cashIn: b.cashIn, cashExact: b.cashExact === true, allowHidden: true, voucher: b.voucher,
   });
   res.status(201).json({ order: mapOrder(row) });
 }));
