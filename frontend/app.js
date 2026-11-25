@@ -500,7 +500,7 @@ function vAkun(){
   '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px"><div class="stat b-lav" style="padding:14px"><span class="lb">'+(name?'Total pesanan':'Pesanan di HP ini')+'</span><span class="vl num" style="font-size:20px">'+mine.length+'</span></div><div class="stat b-gold" style="padding:14px"><span class="lb">Kasbon</span><span class="vl num" style="font-size:20px">'+rp(kb)+'</span></div></div>'+
   installCard()+'<div class="card stack" style="gap:4px;font-size:13px;padding:16px"><b>Info ambil pesanan</b><span style="color:var(--muted)">Ambil di '+esc(M().toko.lokasi)+' sesuai jam yang dipilih. Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</span></div>'+
   '<div class="card stack" style="gap:2px;padding:8px 16px"><b style="padding:8px 0 4px">Informasi toko</b>'+INFO_PAGES.map(([id,t])=>'<button class="li linkrow" data-go="'+id+'"><span>'+t+'</span><span aria-hidden="true">›</span></button>').join('')+'</div>'+
-  '<button class="btn2" data-go="dashboard" style="justify-content:center;height:46px">Masuk admin</button></div>';
+  panduanCard('pembeli')+'<button class="btn2" data-go="dashboard" style="justify-content:center;height:46px">Masuk admin</button></div>';
 }
 /* ---------- Promo (admin) ---------- */
 const toLocalInput=iso=>{if(!iso)return '';const d=new Date(iso),z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes())};
@@ -1879,7 +1879,7 @@ function vRutin(){if(loading())return '<div class="card empty">Memuat…</div>';
      sec.items.map((it,i)=>{const s=st[i],k=sec.p+':'+per[sec.p]+'|'+it.id;return '<div class="ritem'+(s!=='todo'?' done':'')+'"><button type="button" class="rchk" data-rk="'+esc(k)+'" aria-pressed="'+(s!=='todo')+'"'+(s==='auto'?' disabled title="Tercentang otomatis dari data"':'')+' aria-label="'+esc(it.t)+'">'+(s!=='todo'?ic('check',16,3):'')+'</button>'+
        '<span class="rtx"><b>'+esc(it.t)+'</b><small>'+esc(it.d)+(s==='auto'?' <em>· otomatis dari data</em>':'')+'</small></span>'+(it.go?'<button type="button" class="btn3 sm" data-rgo="'+it.go+'"'+(it.tab?' data-rtab="'+it.tab+'"':'')+'>Buka</button>':'')+'</div>'}).join('')+'</section>'}).join('');
   const tg=(key,l,sub)=>'<label class="rtg"><input type="checkbox" data-pgk="'+key+'"'+(pg[key]?' checked':'')+'><span><b>'+l+'</b><small>'+sub+'</small></span></label>';
-  return '<div class="stack">'+notifSettings()+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">'+secs+
+  return '<div class="stack">'+notifSettings()+panduanCard('admin')+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">'+secs+
    '<section class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>Pengingat otomatis</h3><p>Dikirim sebagai notifikasi ke HP admin yang mengaktifkan notifikasi</p></div></div>'+
     tg('kasir','Belum tutup kasir','Setiap hari, jika sampai jam di bawah belum ada tutup kasir')+
     '<label class="f" style="max-width:180px">Jam pengingat tutup kasir<input class="in" type="time" data-pgv="jamKasir" value="'+esc(pg.jamKasir)+'"></label>'+
@@ -1899,6 +1899,12 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-rk],
     document.querySelectorAll('[data-pgk]').forEach(i=>{v[i.dataset.pgk]=i.checked});document.querySelectorAll('[data-pgv]').forEach(i=>{v[i.dataset.pgv]=i.value});
     S.busy=true;render();try{await savePengingatDoc(v);toast('Pengingat tersimpan')}catch(err){}S.busy=false;render()}});
 
+/* ---------- Buku panduan (PDF) ---------- */
+const PANDUAN={pembeli:{f:'panduan-pembeli.pdf',t:'Buku panduan pembeli',d:'Cara belanja, bayar, dan ambil pesanan · PDF 14 halaman'},admin:{f:'panduan-admin.pdf',t:'Buku panduan admin',d:'Pesanan, kasir, stok, opname, rekap, dan rutinitas · PDF 36 halaman'}};
+function panduanCard(k){const p=PANDUAN[k];return '<div class="card pdcard"><span class="tile t-lav">'+ic('doc',20)+'</span><span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><b style="font-size:14px">'+p.t+'</b><small style="color:var(--muted)">'+p.d+'</small></span><button type="button" class="btn sm" data-panduan="'+k+'"'+(S.pdBusy===k?' disabled':'')+'>'+(S.pdBusy===k?'Mengunduh…':'Unduh')+'</button></div>'}
+async function panduanBlob(k){let r;try{r=k==='admin'?await fetch(API+'/api/admin/panduan',{headers:{Authorization:'Bearer '+S.token}}):await fetch('/panduan/'+PANDUAN[k].f+'?v=1')}catch(e){throw new Error('Tidak bisa terhubung ke server. Cek internet lalu coba lagi.')}if(r.status===401&&k==='admin'){S.token=null;ls.set('token',null);S.loaded.admin=false;throw new Error('Sesi admin berakhir, silakan masuk lagi.')}if(!r.ok)throw new Error('File panduan belum tersedia ('+r.status+')');return await r.blob()}
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-panduan]');if(!t)return;const k=t.dataset.panduan;if(S.pdBusy)return;
+  S.pdBusy=k;render();try{const b=await panduanBlob(k);await saveFile('KAmart-'+PANDUAN[k].f,b);toast('Panduan diunduh')}catch(err){toast((err&&err.message)||'Unduhan gagal')}S.pdBusy=null;render()});
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
 function tick(){if(isShopView()){if(document.hidden)return;loadPublic();loadMine();loadQueue()}else if(S.token)loadAdmin()}

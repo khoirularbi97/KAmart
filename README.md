@@ -256,6 +256,7 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | PUT | `/api/admin/cashclose/:date` | admin | Simpan/perbarui tutup kasir harian (modal, tunai, kasbon, keluar, fisik, pecahan) |
 | DELETE | `/api/admin/cashclose/:date` | admin | Hapus tutup kasir |
 | PUT | `/api/admin/rutin` | admin | Centang/hapus centang checklist rutin `{k:'H:2026-11-26|kasir', done}` |
+| GET | `/api/admin/panduan` | admin | Unduh buku panduan admin (PDF) |
 | PUT | `/api/admin/pengingat` | admin | Atur pengingat otomatis (tutup kasir, opname, awal bulan, domain, VPS) |
 | POST | `/api/admin/opname` | admin | Simpan stok opname `{date, items:[{kode, fisik, alasan}]}`; selisih jadi penyesuaian stok |
 | DELETE | `/api/admin/opname/:batch` | admin | Batalkan satu opname (stok kembali) |
@@ -323,3 +324,8 @@ Menu **Rutinitas**: checklist harian, mingguan, bulanan, tiga bulanan, dan tahun
 Pengingat dikirim server sebagai **Web Push** ke HP admin yang mengaktifkan notifikasi (butuh `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`):
 belum tutup kasir (jam bisa diatur, default 21.00 WIB), stok opname di hari terakhir bulan 19.00, rutinitas awal bulan tanggal 1 08.00,
 serta domain/VPS 30, 7, dan 1 hari sebelum tanggal habis. Server mengecek tiap menit; catatan kirim disimpan di `settings` supaya tidak dobel.
+
+## Buku panduan (PDF)
+- **Pembeli:** tombol **Unduh** di halaman **Akun**. File statis `frontend/panduan/panduan-pembeli.pdf` (ikut ter-deploy di Vercel).
+- **Admin:** tombol **Unduh** di halaman **Rutinitas**. File `backend/assets/panduan-admin.pdf` hanya bisa diunduh admin yang sudah masuk lewat `GET /api/admin/panduan`.
+- Kalau panduan diperbarui, ganti file PDF-nya dengan nama yang sama, naikkan `VERSION` di `frontend/sw.js`, lalu push. Untuk file admin, jalankan juga `git pull` di VPS.

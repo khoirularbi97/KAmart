@@ -718,6 +718,14 @@ async function getSetting(key, def) {
 async function setSetting(key, value) {
   await db.query('INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()', [key, JSON.stringify(value)]);
 }
+// Buku panduan admin (PDF) hanya untuk admin yang sudah masuk.
+admin.get('/panduan', (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.download(require('path').join(__dirname, '..', 'assets', 'panduan-admin.pdf'), 'KAmart-panduan-admin.pdf', (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'File panduan admin tidak ditemukan di server.' });
+  });
+});
+
 admin.put('/rutin', ah(async (req, res) => {
   const k = str((req.body || {}).k, 80);
   if (!/^[HWMQY]:[\w-]+\|[\w-]+$/.test(k)) throw bad('Data tidak valid.');
