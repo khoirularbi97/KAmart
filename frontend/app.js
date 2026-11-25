@@ -930,6 +930,7 @@ function vDashboard(){
    '<h2>'+salam()+', Arbi!</h2><p>Ada <strong>'+waiting.length+' pesanan</strong> menunggu disiapkan dan <strong>'+low.length+' produk</strong> perlu restock.</p>'+
    '<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" data-go="kasir">'+ic('plus',18,2.4)+'Buka Kasir</button><button class="btn2" data-go="pesanan">Lihat pesanan</button></div></div>'+plantHtml()+'</section>'+
   '<div class="grid g4">'+stats.map(s=>'<div class="stat b-'+s[0]+'"><div class="row"><span class="tile t-'+s[0]+'">'+ic(s[1],22)+'</span>'+(s[5]?spark(s[5],s[6]):'')+'</div><span class="lb">'+s[2]+'</span><span class="vl num">'+s[3]+'</span><span class="sm">'+s[4]+'</span></div>').join('')+'</div>'+
+  perfCard()+
   '<div class="grid g3">'+
    '<div class="card"><div class="ch"><div><h3>Pesanan masuk</h3><p>Belum siap diambil</p></div><button class="btn3" data-go="pesanan">Semua</button></div>'+
      (waiting.length?waiting.slice(0,5).map(o=>'<div class="li"><span style="display:flex;gap:10px;align-items:center;min-width:0"><span class="av" style="background:'+avc(o.customerName)+'">'+esc(o.customerName[0]||'?')+'</span><span style="min-width:0"><b>'+esc(o.customerName)+'</b><br><span style="font-size:12px;color:var(--muted)">'+esc(itemsText(o))+'</span></span></span><span class="pill-s '+stagePill(o.stage)+'">'+STAGES[o.stage]+'</span></div>').join(''):'<div class="empty">Semua pesanan sudah siap.</div>')+'</div>'+
@@ -1768,6 +1769,56 @@ document.addEventListener('click',async e=>{const t=e.target.closest('[data-ktab
   if(d.ccopen){S.cc=null;ccInit(d.ccopen);render();window.scrollTo({top:0,behavior:'smooth'});return}
   if(d.ccdel){S.ccdel=d.ccdel;render();return}
   if(d.ccdelok){S.ccdel=null;try{await deleteCloseDoc(d.ccdelok);if(S.cc&&S.cc.date===d.ccdelok)S.cc=null;toast('Tutup kasir dihapus')}catch(err){}render()}});
+
+/* ---------- Dashboard: grafik performa ---------- */
+const PERF_COL={kasir:'#6E5AC4',online:'#E8719E'};
+function perfInit(){if(!S.dperf)S.dperf={r:'30',m:'omzet'};return S.dperf}
+function perfBuckets(r,shift){shift=shift||0;const now=new Date(),out=[];
+  if(r==='12'){for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i-shift*12,1);out.push({key:mk(d),label:d.toLocaleDateString('id-ID',{month:'short'}),long:d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})})}}
+  else{const n=+r;for(let i=n-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i-shift*n);out.push({key:ymd(d),label:n<=7?d.toLocaleDateString('id-ID',{weekday:'short'}):String(d.getDate()),long:d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})})}}
+  return out}
+function perfData(r,shift){const bs=perfBuckets(r,shift),idx={};bs.forEach((b,i)=>{idx[b.key]=i;b.kasir={omzet:0,untung:0,trx:0};b.online={omzet:0,untung:0,trx:0}});
+  valid().forEach(o=>{const k=r==='12'?mk(o.createdAt):ymd(new Date(o.createdAt)),i=idx[k];if(i==null)return;const c=bs[i][o.source==='online'?'online':'kasir'];c.omzet+=+o.total||0;c.untung+=profit(o);c.trx++});
+  return bs}
+function perfTot(bs){const t={omzet:0,untung:0,trx:0};bs.forEach(b=>['omzet','untung','trx'].forEach(m=>{t[m]+=b.kasir[m]+b.online[m]}));t.avg=t.trx?Math.round(t.omzet/t.trx):0;return t}
+const perfFmt=(m,v)=>m==='trx'?String(v):rp(v);
+const perfShort=v=>{const a=Math.abs(v),s=v<0?'−':'';return a>=1e6?s+(a/1e6).toLocaleString('id-ID',{maximumFractionDigits:1})+'jt':a>=1e3?s+Math.round(a/1e3)+'rb':s+a};
+function perfDelta(cur,prev){if(!prev)return cur?'<small class="pdl">belum ada data periode lalu</small>':'<small class="pdl">—</small>';const p=(cur-prev)/Math.abs(prev)*100;if(Math.abs(p)<0.5)return '<small class="pdl">sama seperti periode lalu</small>';
+  return '<small class="pdl '+(p>0?'up':'down')+'">'+(p>0?'▲ naik ':'▼ turun ')+Math.abs(p).toLocaleString('id-ID',{maximumFractionDigits:0})+'% <span>vs periode lalu</span></small>'}
+function perfTip(b,m){const k=b.kasir[m],o=b.online[m];return '<b>'+esc(b.long)+'</b><span><i style="background:'+PERF_COL.kasir+'"></i>Kasir '+perfFmt(m,k)+'</span><span><i style="background:'+PERF_COL.online+'"></i>Online '+perfFmt(m,o)+'</span><span><b>Total '+perfFmt(m,k+o)+'</b></span>'}
+function perfSvg(bs,m){const W=Math.max(280,Math.round(S.pw||Math.min(900,window.innerWidth-80))),H=220,L=44,R=8,T=12,B=26,iw=W-L-R,ih=H-T-B,n=bs.length;
+  const tops=bs.map(b=>Math.max(0,b.kasir[m])+Math.max(0,b.online[m])),mx0=Math.max(1,...tops);
+  const step=Math.pow(10,Math.floor(Math.log10(mx0))),nice=[1,2,2.5,5,10].map(x=>x*step).find(x=>x*4>=mx0)||step*10,max=nice*4;
+  const y=v=>T+ih-(v/max)*ih,bw=iw/n,gap=Math.max(2,bw*0.28),w=Math.max(2,bw-gap);
+  let g='';for(let i=0;i<=4;i++){const v=nice*i,yy=y(v).toFixed(1);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+yy+'" y2="'+yy+'" stroke="#ECE7F5" stroke-width="1"/><text x="'+(L-6)+'" y="'+yy+'" dy="3.5" text-anchor="end" class="pax">'+(m==='trx'?v:perfShort(v))+'</text>'}
+  const every=Math.max(1,Math.ceil(n/Math.max(4,Math.floor(iw/46))));let bars='',hits='',xl='';
+  bs.forEach((b,i)=>{const x=L+i*bw+gap/2,k=Math.max(0,b.kasir[m]),o=Math.max(0,b.online[m]),hk=(k/max)*ih,ho=(o/max)*ih,y0=T+ih;
+    if(hk>0)bars+='<rect x="'+x.toFixed(1)+'" y="'+(y0-hk).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+hk.toFixed(1)+'" rx="'+Math.min(3,w/2)+'" fill="'+PERF_COL.kasir+'"/>';
+    if(ho>0)bars+='<rect x="'+x.toFixed(1)+'" y="'+(y0-hk-ho-(hk>0?2:0)).toFixed(1)+'" width="'+w.toFixed(1)+'" height="'+ho.toFixed(1)+'" rx="'+Math.min(3,w/2)+'" fill="'+PERF_COL.online+'"/>';
+    hits+='<rect class="phit" data-pi="'+i+'" x="'+(L+i*bw).toFixed(1)+'" y="'+T+'" width="'+bw.toFixed(1)+'" height="'+ih+'" fill="transparent"><title>'+esc(b.long+': '+perfFmt(m,b.kasir[m]+b.online[m]))+'</title></rect>';
+    if(i%every===0||(i===n-1&&i%every>=every/2))xl+='<text x="'+(L+i*bw+bw/2).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" class="pax">'+esc(b.label)+'</text>'});
+  const neg=bs.some(b=>b.kasir[m]<0||b.online[m]<0);
+  return '<svg class="psvg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grafik '+({omzet:'penjualan',untung:'untung',trx:'transaksi'})[m]+' per '+(bs.length===12?'bulan':'hari')+'">'+g+'<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(T+ih)+'" y2="'+(T+ih)+'" stroke="#CFC6E4"/>'+bars+'<rect id="psel" x="-99" y="'+T+'" width="'+bw.toFixed(1)+'" height="'+ih+'" fill="rgba(110,90,196,.08)" rx="6"/>'+hits+xl+'</svg>'+(neg?'<small style="color:var(--muted)">Hari dengan untung minus digambar 0; angka aslinya ada di tabel.</small>':'')}
+function perfCard(){const s=perfInit(),bs=perfData(s.r),prev=perfData(s.r,1),t=perfTot(bs),tp=perfTot(prev),m=s.m;
+  const kpi=(lab,v,pv,key)=>'<div class="pk"><small>'+lab+'</small><b class="num">'+(key==='trx'?v:rp(v))+'</b>'+perfDelta(v,pv)+'</div>';
+  const seg=(attr,cur,opts)=>'<div class="seg">'+opts.map(([v,l])=>'<button type="button" class="sg'+(cur===v?' on':'')+'" data-'+attr+'="'+v+'" aria-pressed="'+(cur===v)+'">'+l+'</button>').join('')+'</div>';
+  const last=bs.slice().reverse().find(b=>b.kasir.trx+b.online.trx)||bs[bs.length-1];
+  return '<div class="card stack perf" style="gap:14px"><div class="ch" style="margin:0;flex-wrap:wrap;gap:10px"><div><h3>Performa penjualan</h3><p>'+({'7':'7 hari terakhir','30':'30 hari terakhir','12':'12 bulan terakhir'})[s.r]+', dibanding periode sebelumnya</p></div>'+seg('pr',s.r,[['7','7 hari'],['30','30 hari'],['12','12 bulan']])+'</div>'+
+   '<div class="pks">'+kpi('Penjualan',t.omzet,tp.omzet)+kpi('Untung kotor',t.untung,tp.untung)+kpi('Transaksi',t.trx,tp.trx,'trx')+kpi('Rata-rata / transaksi',t.avg,tp.avg)+'</div>'+
+   '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+seg('pm',m,[['omzet','Penjualan'],['untung','Untung'],['trx','Transaksi']])+
+     '<span class="plg"><span><i style="background:'+PERF_COL.kasir+'"></i>Kasir</span><span><i style="background:'+PERF_COL.online+'"></i>Online</span></span></div>'+
+   '<div class="ptip" id="ptip" aria-live="polite">'+perfTip(last,m)+'</div>'+
+   '<div class="pwrap">'+perfSvg(bs,m)+'</div>'+(setTimeout(perfFit,0),'')+
+   '<details class="ptbl"><summary>Lihat tabel</summary><div style="overflow:auto"><table><thead><tr><th>'+(s.r==='12'?'Bulan':'Tanggal')+'</th><th>Kasir</th><th>Online</th><th>Total</th><th>Untung</th><th>Trx</th></tr></thead><tbody>'+
+     bs.slice().reverse().map(b=>'<tr><td>'+esc(b.long)+'</td><td class="num">'+rp(b.kasir.omzet)+'</td><td class="num">'+rp(b.online.omzet)+'</td><td class="num"><b>'+rp(b.kasir.omzet+b.online.omzet)+'</b></td><td class="num">'+(b.kasir.untung+b.online.untung<0?'−':'')+rp(Math.abs(b.kasir.untung+b.online.untung))+'</td><td class="num">'+(b.kasir.trx+b.online.trx)+'</td></tr>').join('')+'</tbody></table></div></details></div>'}
+function perfFit(){const el=document.querySelector('.perf .pwrap');if(el&&el.clientWidth&&Math.abs(el.clientWidth-(S.pw||0))>8){S.pw=el.clientWidth;render()}}
+let perfRT=null;window.addEventListener('resize',()=>{clearTimeout(perfRT);perfRT=setTimeout(perfFit,200)});
+function perfShow(i){const s=perfInit(),bs=perfData(s.r),b=bs[i];if(!b)return;const tip=document.getElementById('ptip'),sel=document.getElementById('psel'),hit=document.querySelector('.phit[data-pi="'+i+'"]');
+  if(tip)tip.innerHTML=perfTip(b,s.m);if(sel&&hit)sel.setAttribute('x',hit.getAttribute('x'))}
+document.addEventListener('mouseover',e=>{const t=e.target.closest&&e.target.closest('.phit');if(t)perfShow(+t.dataset.pi)});
+document.addEventListener('click',e=>{const t=e.target.closest('.phit,[data-pr],[data-pm]');if(!t)return;
+  if(t.classList.contains('phit')){perfShow(+t.dataset.pi);return}
+  const s=perfInit();if(t.dataset.pr)s.r=t.dataset.pr;if(t.dataset.pm)s.m=t.dataset.pm;render()});
 
 /* ---------- boot ---------- */
 function isShopView(){return VIEWS.find(v=>v.id===S.view).g==='Pembeli'}
