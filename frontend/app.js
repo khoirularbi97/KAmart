@@ -23,7 +23,7 @@ const VIEWS=[
   {id:'master',t:'Kelola Master',g:'Admin',ic:'box'}
 ];
 const IC={
-  doc:'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',grid:'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16',
+  rapat:'M4 5h16M4 9.5h16M4 14h16M4 18.5h16',doc:'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',grid:'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16',
   shop:'M4 7h16l-1.5 12h-13zM8 7a4 4 0 0 1 8 0',home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   inbox:'M3 13h5l1 3h6l1-3h5M5 5h14l2 8v6H3v-6z',pos:'M4 4h16v16H4zM8 9h8M8 13h3M8 17h3M14 13h2M14 17h2',
   box:'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8',down:'M12 3v12M7 10l5 5 5-5M4 21h16',
@@ -50,7 +50,7 @@ const S={products:[],customers:[],orders:[],stockin:[],promos:[],expenses:[],adj
   view:'toko',cat:'Semua',cart:{},co:Object.assign({name:'',line:'',slot:'Istirahat 12.00',pay:'QRIS',note:''},ls.get('me',{})),
   k:{cart:{},buyer:'',method:'Tunai',cash:0},receipt:null,confirm:null,
   pf:null,sf:{date:(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date()),kode:'',qty:'',harga:'',tempat:'',sumber:'laci'},
-  xp:null,cf:{name:'',line:'',wa:''},month:mk(new Date()),kfilter:'Belum',lastPlaced:null,busy:false,q:'',qrisFor:null,qrisStatic:false,layout:ls.get('layout','auto'),mine:[],placed:null,placedDl:'',alerts:[],alerted:new Set(),ns:ls.get('ns',{sound:true,push:false}),
+  xp:null,cf:{name:'',line:'',wa:''},month:mk(new Date()),kfilter:'Belum',lastPlaced:null,busy:false,q:'',qrisFor:null,qrisStatic:false,layout:ls.get('layout','auto'),compact:ls.get('compact',false),mine:[],placed:null,placedDl:'',alerts:[],alerted:new Set(),ns:ls.get('ns',{sound:true,push:false}),
   token:ls.get('token',null),pub:[],mine:[],queue:[],reg:false,netErr:'',lg:{user:'',pass:'',err:''}};
 /* ---------- data master (bisa diubah di menu Kelola Master) ---------- */
 const MASTER_DEFAULT={
@@ -357,12 +357,13 @@ function notifSettings(){
 }
 function layoutSwitch(){
   const o=[['auto','Otomatis','auto'],['mobile','HP','phone'],['desktop','Desktop','monitor']];
-  return '<div class="seg lay" role="radiogroup" aria-label="Mode tampilan admin">'+o.map(([v,t,i])=>'<button class="sg'+(S.layout===v?' on':'')+'" role="radio" aria-checked="'+(S.layout===v)+'" data-layout="'+v+'" title="Tampilan '+t+'">'+ic(i,16)+'<span>'+t+'</span></button>').join('')+'</div>';
+  return '<div class="seg lay" role="radiogroup" aria-label="Mode tampilan admin">'+o.map(([v,t,i])=>'<button class="sg'+(S.layout===v?' on':'')+'" role="radio" aria-checked="'+(S.layout===v)+'" data-layout="'+v+'" title="Tampilan '+t+'">'+ic(i,16)+'<span>'+t+'</span></button>').join('')+'<i class="laysep" aria-hidden="true"></i><button class="sg'+(S.compact?' on':'')+'" data-act="compact" aria-pressed="'+!!S.compact+'" title="Tampilan ringkas: jarak dan ukuran lebih rapat">'+ic('rapat',16)+'<span>Ringkas</span></button></div>';
 }
 function applyLayout(admin){
   const lay=admin?S.layout:'auto';
   document.body.classList.toggle('force-mobile',lay==='mobile');
   document.body.classList.toggle('force-desktop',lay==='desktop');
+  document.body.classList.toggle('compact',!!(admin&&S.compact));
   // Mode Desktop di layar sempit: tata letak 1280 px diperkecil agar muat (seperti "situs desktop").
   const w=document.documentElement.clientWidth||window.innerWidth;
   const z=lay==='desktop'&&w<1200?Math.max(.3,w/1280):1;
@@ -1221,6 +1222,7 @@ document.addEventListener('click',async e=>{
   if(d.go){e.preventDefault();go(d.go);window.scrollTo({top:0});return}
   if(d.qrisfor){S.qrisFor=d.qrisfor;render();return}
   if(d.receipt){const o=findOrder(d.receipt);if(o)downloadReceipt(o).then(()=>toast('Struk diunduh')).catch(e=>toast(e.message||'Struk gagal diunduh'));return}
+  if(d.act==='compact'){S.compact=!S.compact;ls.set('compact',S.compact);toast('Tampilan ringkas '+(S.compact?'aktif':'mati'));render();return}
   if(d.layout){S.layout=d.layout;ls.set('layout',S.layout);toast('Tampilan: '+({auto:'Otomatis',mobile:'HP',desktop:'Desktop'})[S.layout]);render();window.scrollTo({top:0});return}
   if(d.ndismiss){S.alerts=S.alerts.filter(x=>x.id!==d.ndismiss);render();return}
   if(d.cat){S.cat=d.cat;render();return}

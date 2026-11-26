@@ -311,6 +311,49 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
   .illu,.plant{display:none}
   .top h1{font-size:22px}
 }
+/* Tampilan ringkas (admin) */
+.laysep{width:1px;align-self:stretch;margin:4px 2px;background:#E6DAE8}
+.compact{padding-block:10px}
+.compact .app{gap:12px}
+.compact .side{flex-basis:200px;padding:16px 10px;gap:12px;border-radius:22px;height:calc(100vh - 20px);height:calc(100dvh - 20px);top:10px}
+.compact .who img{width:56px;height:56px}
+.compact .who strong{font-size:14px!important}
+.compact .navg{gap:2px}.compact .navg small{padding:4px 10px 0}
+.compact .nv{height:36px;font-size:13px;border-radius:12px}
+.compact .sidenote{padding:10px 12px;font-size:11.5px}
+.compact .main{padding:14px 18px 18px;border-radius:22px;min-height:calc(100vh - 20px)}
+.compact.force-mobile .main{padding:12px 12px 110px}
+.compact .top{margin-bottom:12px;gap:8px}
+.compact .top h1{font-size:20px}
+.compact .top .sub{font-size:12px}
+.compact .stack{gap:12px}
+.compact .grid{gap:10px}
+.compact .card{padding:12px 14px;border-radius:18px}
+.compact .ch{margin-bottom:8px}.compact .ch h3{font-size:14.5px}
+.compact .stat{padding:12px 14px;border-radius:18px}
+.compact .stat .vl{font-size:20px}
+.compact .tile{width:36px;height:36px;border-radius:11px}
+.compact .hero{padding:14px 18px;gap:12px;border-radius:20px}
+.compact .hero .illu,.compact .hero .plant{display:none!important}
+.compact .hero h2{font-size:18px}.compact .hero p{font-size:13px}
+.compact .hero>div{flex-direction:row!important;flex-wrap:wrap;align-items:center;column-gap:14px!important;row-gap:6px!important}
+.compact .hero .chip{display:none}
+.compact .hero p{max-width:none;flex:1 1 300px}
+.compact .hero>div>div:last-child{margin-left:auto}
+.compact .stat .row{margin-bottom:2px}.compact .stat .row svg:not(.tile svg){max-height:28px}
+.compact .btn{height:38px;padding:0 14px}
+.compact .btn2{height:34px;padding:0 12px;font-size:13px}
+.compact .btn3{height:32px}
+.compact .sg{height:32px;padding:0 11px;font-size:12.5px}
+.compact .lay .sg{height:30px;padding:0 10px}
+.compact .cbtn{width:36px;height:36px}
+.compact .in{height:38px;border-radius:12px}
+.compact .ktile{min-height:84px;padding:9px;border-radius:14px}
+.compact .mc{padding:8px;border-radius:16px}
+.compact .mbar{padding:9px 12px;border-radius:18px;margin-bottom:10px}
+.compact.force-mobile .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:860px){.compact .g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.compact.force-mobile .stat .vl{font-size:17px}@media (max-width:860px){.compact .stat .vl{font-size:17px}}
 /* Desktop: sidebar sudah berisi semua menu, navigasi bawah disembunyikan */
 @media (min-width:861px){body:not(.force-mobile) .pill{display:none}body:not(.force-mobile) .main{padding-bottom:26px}}
 .force-desktop .pill{display:none}
