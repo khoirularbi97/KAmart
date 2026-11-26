@@ -480,7 +480,7 @@ function vPesananku(){
   let h=shopHead('Antrian Pesanan','Pesanan yang sedang diproses','<button class="btn3" data-act="refresh"'+(S.refreshing?' disabled':'')+'>'+(S.refreshing?'Memuat…':'↻ Perbarui')+'</button>');
   if(loading())return h+'<div class="card empty">Memuat antrian…</div>';
   const q=queueOrders();
-  h+='<div class="stack" style="gap:12px"><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'+[0,1,2].map(i=>'<div class="stat '+['b-lav','b-pink','b-gold'][i]+'" style="padding:10px 12px;gap:0"><span class="vl num" style="font-size:20px">'+q.filter(o=>o.stage===i).length+'</span><span class="sm" style="font-size:11px">'+STAGES[i]+'</span></div>').join('')+'</div>';
+  h+='<div class="stack" style="gap:12px">'+ulasanPending().map(ulasanCard).join('')+'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'+[0,1,2].map(i=>'<div class="stat '+['b-lav','b-pink','b-gold'][i]+'" style="padding:10px 12px;gap:0"><span class="vl num" style="font-size:20px">'+q.filter(o=>o.stage===i).length+'</span><span class="sm" style="font-size:11px">'+STAGES[i]+'</span></div>').join('')+'</div>';
   if(!q.length)h+='<div class="card empty stack" style="align-items:center;gap:12px"><span>Tidak ada pesanan yang sedang diproses.</span><button class="btn" data-go="toko">Mulai belanja</button></div>';
   h+=q.map(o=>{const me=isMine(o),m=me?(findOrder(o.id)||o):o;
     return '<article class="card stack" style="gap:8px;padding:14px 16px'+(me?';border:2px solid var(--primary)':'')+'">'+
@@ -737,11 +737,11 @@ function vRiwayat(){
         '<span class="rhmain"><span class="rhtop"><b>'+esc(o.customerName||'Pembeli umum')+'</b><span class="num'+(st<0?' strike':'')+'">'+rp(o.total)+'</span></span>'+
         '<small>'+esc(o.code||'')+' · '+new Date(o.createdAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+' · '+(o.source==='online'?'Online':'Kasir')+'</small>'+
         '<span class="rhitems">'+esc((o.items||[]).map(i=>i.qty+'× '+i.name+(i.bonus?' (bonus)':'')).join(', ')||'-')+'</span>'+
-        '<span class="rhpills"><span class="pill-s '+(st<0?'ps-bad':stagePill(st))+'">'+stageText(st)+'</span>'+(st<0?'':'<span class="pill-s '+(o.paid?'ps-ok':'ps-warn')+'">'+esc(payLabel(o.pay))+(o.paid?' · lunas':' · belum')+'</span>')+'</span></span></button>'+
+        '<span class="rhpills"><span class="pill-s '+(st<0?'ps-bad':stagePill(st))+'">'+stageText(st)+'</span>'+(st<0?'':'<span class="pill-s '+(o.paid?'ps-ok':'ps-warn')+'">'+esc(payLabel(o.pay))+(o.paid?' · lunas':' · belum')+'</span>')+(o.review?'<span class="pill-s ps-lav">'+(+o.review.bintang)+'★</span>':'')+'</span></span></button>'+
         (open?'<div class="rhdet">'+(o.items||[]).map(i=>'<div class="li"><span>'+i.qty+'× '+esc(i.name)+(i.bonus?' <small style="color:var(--ok);font-weight:700">bonus</small>':'')+'</span><span class="num">'+(i.bonus?'Gratis':rp((+i.qty||0)*(+i.price||0)))+'</span></div>').join('')+
           ((o.diskon||[]).length?sumRows({subtotal:o.subtotal==null?o.total:o.subtotal,diskon:o.diskon}):'')+'<div class="li" style="font-weight:700"><span>Total</span><span class="num">'+rp(o.total)+'</span></div>'+
           '<small style="color:var(--muted)">'+[o.customerLine,o.slot?'Ambil: '+o.slot:'',o.note?'Catatan: '+o.note:'',o.paidAt&&o.paid?'Dibayar '+tglJam(o.paidAt):'',st>=0?'Untung '+rp(profit(o)):''].filter(Boolean).map(esc).join(' · ')+'</small>'+
-          '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(st>=0&&!o.paid?'<button class="btn3" data-paid="'+o.id+'">Tandai lunas</button>':'')+'<button class="btn3" data-rcpt="'+o.id+'">Unduh struk</button></div></div>':'')+'</div>'}).join('')+(pg.bar?'<div style="padding-bottom:12px">'+pg.bar+'</div>':'')+'</div>'
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(st>=0&&!o.paid?'<button class="btn3" data-paid="'+o.id+'">Tandai lunas</button>':'')+'<button class="btn3" data-rcpt="'+o.id+'">Unduh struk</button></div>'+(o.review?'<div class="banner b-lav" style="font-size:13px"><b>Ulasan:</b> <span class="rvst sm">'+starsTxt(+o.review.bintang)+'</span> '+esc([(o.review.tags||[]).join(', '),o.review.saran].filter(Boolean).join(' · '))+'</div>':'')+'</div>':'')+'</div>'}).join('')+(pg.bar?'<div style="padding-bottom:12px">'+pg.bar+'</div>':'')+'</div>'
      :'<div class="card empty">Tidak ada pesanan untuk filter ini.</div>')+
   '</div>';
 }
@@ -938,7 +938,7 @@ function vDashboard(){
      (topA.length?'<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center"><div role="img" aria-label="'+esc(topA.map(x=>x[0]+' '+x[1]).join(', '))+'" style="width:124px;height:124px;border-radius:50%;background:'+cg+';display:flex;align-items:center;justify-content:center;box-shadow:0 12px 24px rgba(110,90,196,.2)"><span style="width:74px;height:74px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center"><b class="num" style="font-size:18px">'+topT+'</b><small style="font-size:10px;color:var(--muted)">terjual</small></span></div><div style="flex:1 1 130px;display:flex;flex-direction:column;gap:8px">'+topA.map((x,i)=>'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span style="display:flex;align-items:center;gap:8px"><i style="width:10px;height:10px;border-radius:3px;background:'+cols[i]+'"></i>'+esc(x[0])+'</span><b class="num">'+x[1]+'</b></div>').join('')+'</div></div>':'<div class="empty">Belum ada penjualan bulan ini.</div>')+'</div>'+
    '<div class="card"><div class="ch"><div><h3>Stok menipis</h3><p>Di bawah stok minimum</p></div><button class="btn3" data-go="stok">Catat stok</button></div>'+
      (low.length?low.map(x=>'<div class="li"><span><b>'+esc(x.p.name)+'</b><br><span style="font-size:12px;color:var(--muted)">min. '+(+x.p.min||0)+' '+esc(x.p.unit||'')+'</span></span><span class="pill-s ps-bad num">sisa '+x.s+'</span></div>').join(''):'<div class="empty">Semua stok aman.</div>')+'</div>'+
-  '</div></div>';
+  '</div>'+ulasanCardAdmin()+'</div>';
 }
 
 function vPesanan(){
@@ -1555,7 +1555,8 @@ function exportSpec(view){
       xKV('Ringkasan',[['Penjualan hari ini',sum(today,o=>+o.total||0)],['Pesanan hari ini',today.length,'n'],['Penjualan '+mLabel(mo),sum(month,o=>+o.total||0)],['Untung kotor '+mLabel(mo),sum(month,profit)],['Belum dibayar',sum(kb,o=>+o.total||0)],['Pesanan menunggu disiapkan',v.filter(o=>o.stage<2).length,'n'],['Produk perlu restock',low.length,'n']]),
       xSheet('Penjualan 7 hari',[['Tanggal'],['Transaksi','n'],['Penjualan','rp'],['Untung','rp']],days,{total:[1,2,3]}),
       xSheet('Produk terlaris',[['Produk'],['Terjual','n'],['Omzet','rp']],Object.values(top).sort((a,b)=>b[1]-a[1]),{total:[1,2]}),
-      xSheet('Stok menipis',[['Kode'],['Produk'],['Sisa','n'],['Minimum','n']],low.map(x=>[x.p.kode,x.p.name,x.s,+x.p.min||0]))]}}
+      xSheet('Stok menipis',[['Kode'],['Produk'],['Sisa','n'],['Minimum','n']],low.map(x=>[x.p.kode,x.p.name,x.s,+x.p.min||0])),
+      xSheet('Ulasan 30 hari',[['Tanggal'],['Kode'],['Pembeli'],['Bintang','n'],['Pilihan'],['Saran']],ulasanList(30).map(o=>[xDate(String(o.review.at||o.createdAt).slice(0,10)),o.code||'',o.customerName,+o.review.bintang||0,(o.review.tags||[]).join(', '),o.review.saran||'']))]}}
   if(view==='pesanan'){const l=v.filter(o=>o.stage<3||sameDay(o.createdAt)||!o.paid).sort((a,b)=>(a.stage-b.stage)||a.createdAt.localeCompare(b.createdAt));
     return{file:'pesanan-'+t,title:'Pesanan',sub:'Pesanan berjalan per '+tglJam(now),sheets:[
       xSheet('Pesanan',[['Tahap'],['Kode'],['Waktu'],['Pembeli'],['Bagian'],['Barang'],['Total','rp'],['Bayar'],['Status bayar'],['Waktu ambil'],['Catatan']],l.map(o=>[STAGES[o.stage],o.code||'',tglJam(o.createdAt),o.customerName,o.customerLine||'',itemsText(o),+o.total||0,payLabel(o.pay),o.paid?'Lunas':'Belum',o.slot||'',o.note||'']),{total:[6]}),
@@ -1862,6 +1863,7 @@ const RUTIN=[
  {p:'M',t:'Bulanan',sub:'Akhir / awal bulan',items:[
   {id:'opname',t:'Stok opname semua produk',d:'Hari terakhir bulan. Cetak Lembar hitung lewat Export → PDF di tab Stok opname.',go:'stok',tab:'opname'},
   {id:'arus',t:'Pastikan Arus stok di Rekap “Seimbang”',d:'Kalau ada selisih, cari penyebabnya dulu sebelum menekan “Samakan”.',go:'rekap'},
+  {id:'ulasan',t:'Baca ulasan & saran pembeli',d:'Kartu Kepuasan pembeli di Dashboard. Tindak lanjuti keluhan yang paling sering.',go:'dashboard'},
   {id:'angka',t:'Pantau margin, susut %, dan selisih kas',d:'Susut idealnya di bawah 1–2% dari penjualan.',go:'rekap'},
   {id:'export',t:'Export Rekap (Excel & PDF), simpan di Google Drive',d:'Sekaligus jadi cadangan data.',go:'rekap'},
   {id:'harga',t:'Tinjau harga jual vs modal rata-rata',d:'Naikkan harga produk yang modalnya naik.',go:'produk'},
@@ -1928,6 +1930,44 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-pgn]');if(
   st.p=+to;render();const bar=document.querySelector('[data-pgn^="'+k+'|"]');const box=bar&&bar.closest('.card');if(box&&box.getBoundingClientRect().top<0)box.scrollIntoView({block:'start'})});
 document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.pgs)return;const k=t.dataset.pgs,st=S.pg&&S.pg[k];if(!st)return;
   const first=(st.p-1)*st.n;st.n=+t.value;st.p=Math.floor(first/st.n)+1;try{ls.set('pgn:'+k,st.n)}catch(e){}render()});
+/* ---------- Ulasan pembeli (hanya dilihat admin) ---------- */
+const ULASAN_TAGS={baik:['Barang lengkap','Siap tepat waktu','Harga pas','Pelayanan ramah'],kurang:['Stok sering habis','Antre lama','Harga kemahalan','Pesanan kurang/salah']};
+const ULASAN_HARI=14,BINTANG_TXT=['','Kecewa','Kurang','Cukup','Puas','Puas sekali'];
+function rvSkip(){try{return ls.get('ulasanSkip',[])||[]}catch(e){return[]}}
+function ulasanPending(){const lim=Date.now()-ULASAN_HARI*864e5,skip=rvSkip();
+  return myOrders().filter(o=>o.source==='online'&&o.stage===3&&!o.review&&!skip.includes(o.id)&&new Date(o.createdAt).getTime()>lim).slice(0,2)}
+const starsTxt=n=>'★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);
+function ulasanCard(o){S.rv=S.rv||{};const f=S.rv[o.id]||{b:0,tags:[],saran:''},id=esc(o.id);
+  const tags=f.b?(f.b>=4?ULASAN_TAGS.baik:ULASAN_TAGS.kurang.concat(ULASAN_TAGS.baik)):[];
+  return '<article class="card stack rvcard" style="gap:10px;padding:14px 16px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><span style="min-width:0"><b style="font-size:15px">Gimana belanjanya?</b><br><small style="color:var(--muted)">'+esc(o.code||'')+' · '+esc(itemsText(o))+'</small></span><button type="button" class="mbtn" data-rvskip="'+id+'" aria-label="Lewati ulasan">✕</button></div>'+
+   '<div class="rvstars" role="radiogroup" aria-label="Beri bintang">'+[1,2,3,4,5].map(n=>'<button type="button" role="radio" aria-checked="'+(f.b===n)+'" aria-label="'+n+' bintang, '+BINTANG_TXT[n]+'" class="rvs'+(n<=f.b?' on':'')+'" data-rvb="'+id+'|'+n+'">★</button>').join('')+(f.b?'<span class="rvlbl">'+BINTANG_TXT[f.b]+'</span>':'')+'</div>'+
+   (f.b?'<div class="rvtags">'+tags.map(t=>'<button type="button" class="rvtag'+(f.tags.includes(t)?' on':'')+(ULASAN_TAGS.kurang.includes(t)?' neg':'')+'" aria-pressed="'+f.tags.includes(t)+'" data-rvt="'+id+'|'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div>'+
+     '<textarea class="in" rows="2" maxlength="200" data-rvsaran="'+id+'" placeholder="Saran untuk toko (opsional)" style="height:auto;padding:10px 12px;resize:vertical">'+esc(f.saran)+'</textarea>'+
+     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><small style="color:var(--muted)">Hanya dibaca penjual, tidak tampil di toko.</small><button type="button" class="btn" data-rvsend="'+id+'"'+(S.rvBusy===o.id?' disabled':'')+'>'+(S.rvBusy===o.id?'Mengirim…':'Kirim ulasan')+'</button></div>'
+    :'<small style="color:var(--muted)">Ketuk bintang. Ulasan hanya dibaca penjual, tidak tampil di toko.</small>')+'</article>'}
+async function saveUlasanDoc(o,review){const r=await api('POST','/api/orders/'+encodeURIComponent(o.id)+'/review',{tokens:ls.get('orders',[]),bintang:review.bintang,tags:review.tags,saran:review.saran});const i=S.mine.findIndex(x=>x.id===o.id);if(i>=0)S.mine[i]=r.order}
+document.addEventListener('input',e=>{const t=e.target;if(!t.dataset||!t.dataset.rvsaran)return;S.rv=S.rv||{};const f=S.rv[t.dataset.rvsaran]=S.rv[t.dataset.rvsaran]||{b:0,tags:[],saran:''};f.saran=t.value});
+document.addEventListener('click',async e=>{const t=e.target.closest('[data-rvb],[data-rvt],[data-rvskip],[data-rvsend]');if(!t)return;const d=t.dataset;S.rv=S.rv||{};
+  const get=id=>S.rv[id]=S.rv[id]||{b:0,tags:[],saran:''};
+  if(d.rvb){const[id,n]=d.rvb.split('|'),f=get(id);f.b=+n;const ok=f.b>=4?ULASAN_TAGS.baik:ULASAN_TAGS.kurang.concat(ULASAN_TAGS.baik);f.tags=f.tags.filter(x=>ok.includes(x));render();return}
+  if(d.rvt){const i=d.rvt.indexOf('|'),id=d.rvt.slice(0,i),tag=d.rvt.slice(i+1),f=get(id);f.tags=f.tags.includes(tag)?f.tags.filter(x=>x!==tag):f.tags.concat(tag);render();return}
+  if(d.rvskip){const s=rvSkip();s.push(d.rvskip);try{ls.set('ulasanSkip',s.slice(-100))}catch(err){}render();return}
+  if(d.rvsend){const o=findOrder(d.rvsend),f=get(d.rvsend);if(!o||!f.b)return;S.rvBusy=o.id;render();
+    try{await saveUlasanDoc(o,{bintang:f.b,tags:f.tags,saran:String(f.saran||'').trim().slice(0,200),at:new Date().toISOString()});delete S.rv[o.id];toast('Terima kasih atas ulasannya!')}catch(err){toast((err&&err.message)||'Ulasan gagal dikirim')}
+    S.rvBusy=null;render()}});
+/* Ringkasan untuk admin */
+function ulasanList(days){const lim=Date.now()-days*864e5;return valid().filter(o=>o.review&&new Date(o.review.at||o.createdAt).getTime()>lim).sort((a,b)=>String(b.review.at||'').localeCompare(String(a.review.at||'')))}
+function ulasanCardAdmin(){const l=ulasanList(30),n=l.length,avg=n?sum(l,o=>+o.review.bintang||0)/n:0;
+  const dist=[5,4,3,2,1].map(b=>[b,l.filter(o=>+o.review.bintang===b).length]),mx=Math.max(1,...dist.map(x=>x[1]));
+  const tc={};l.forEach(o=>(o.review.tags||[]).forEach(t=>tc[t]=(tc[t]||0)+1));const keluh=ULASAN_TAGS.kurang.map(t=>[t,tc[t]||0]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]),puji=ULASAN_TAGS.baik.map(t=>[t,tc[t]||0]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
+  const saran=l.filter(o=>o.review.saran||+o.review.bintang<=2).slice(0,4);
+  return '<div class="card rvadmin"><div class="ch"><div><h3>Kepuasan pembeli</h3><p>30 hari terakhir · ulasan pesanan online</p></div></div>'+
+   (n?'<div class="rvsum"><div class="rvavg"><b class="num">'+avg.toFixed(1).replace('.',',')+'</b><span class="rvst" aria-label="'+avg.toFixed(1)+' dari 5 bintang">'+starsTxt(Math.round(avg))+'</span><small>'+n+' ulasan</small></div>'+
+     '<div class="rvdist">'+dist.map(([b,c])=>'<div><span>'+b+'★</span><i><em style="width:'+Math.round(c/mx*100)+'%"></em></i><span class="num">'+c+'</span></div>').join('')+'</div></div>'+
+     (keluh.length?'<div class="rvchips"><small>Keluhan</small>'+keluh.map(([t,c])=>'<span class="pill-s ps-bad">'+esc(t)+' · '+c+'</span>').join('')+'</div>':'')+
+     (puji.length?'<div class="rvchips"><small>Pujian</small>'+puji.map(([t,c])=>'<span class="pill-s ps-ok">'+esc(t)+' · '+c+'</span>').join('')+'</div>':'')+
+     (saran.length?'<div style="margin-top:6px">'+saran.map(o=>'<div class="li" style="align-items:flex-start"><span style="min-width:0"><b>'+esc(o.customerName)+'</b> <span class="rvst sm'+(+o.review.bintang<=2?' bad':'')+'">'+starsTxt(+o.review.bintang)+'</span><br><small style="color:var(--muted)">'+esc([o.review.saran,(o.review.tags||[]).join(', ')].filter(Boolean).join(' · ')||'Tanpa keterangan')+'</small></span><small style="color:var(--muted);white-space:nowrap">'+esc(dLabel(o.review.at||o.createdAt).split(',')[0])+'</small></div>').join('')+'</div>':'')
+    :'<div class="empty">Belum ada ulasan. Pembeli diminta memberi bintang setelah pesanan online selesai.</div>')+'</div>'}
 /* ---------- Buku panduan (PDF) ---------- */
 const PANDUAN={pembeli:{f:'panduan-pembeli.pdf',t:'Buku panduan pembeli',d:'Cara belanja, bayar, dan ambil pesanan · PDF 14 halaman'},admin:{f:'panduan-admin.pdf',t:'Buku panduan admin',d:'Pesanan, kasir, stok, opname, rekap, dan rutinitas · PDF 36 halaman'}};
 function panduanCard(k){const p=PANDUAN[k];return '<div class="card pdcard"><span class="tile t-lav">'+ic('doc',20)+'</span><span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><b style="font-size:14px">'+p.t+'</b><small style="color:var(--muted)">'+p.d+'</small></span><button type="button" class="btn sm" data-panduan="'+k+'"'+(S.pdBusy===k?' disabled':'')+'>'+(S.pdBusy===k?'Mengunduh…':'Unduh')+'</button></div>'}

@@ -238,6 +238,7 @@ Untuk frontend lokal, isi `frontend/config.js` dengan `window.KAMART_API_BASE = 
 | GET | `/api/customers/check?name=` | publik | Cek pelanggan terdaftar (boleh kasbon) |
 | POST | `/api/orders` | publik | Buat pesanan online |
 | POST | `/api/orders/lookup` | publik | Status pesanan milik HP pembeli (pakai token) |
+| POST | `/api/orders/:id/review` | publik (token pesanan) | Ulasan bintang 1–5 untuk pesanan online yang sudah selesai |
 | POST | `/api/orders/:id/qris` | publik (token pesanan) | QRIS Midtrans untuk pesanan |
 | POST | `/api/payment/midtrans` | Midtrans (signature) | Webhook pembayaran |
 | GET | `/api/master` | publik | Data master (kategori, metode bayar, waktu ambil, info toko) |
@@ -332,3 +333,8 @@ serta domain/VPS 30, 7, dan 1 hari sebelum tanggal habis. Server mengecek tiap m
 
 ## Paginasi tabel
 Daftar panjang dibagi per halaman, dengan pilihan 10 / 25 / 50 / 100 baris (diingat per daftar di perangkat itu). Berlaku di Riwayat, Produk, Belum Bayar, riwayat Stok masuk, riwayat Stok opname, riwayat Tutup kasir, Per produk, dan Pengeluaran di Rekap. Halaman kembali ke 1 saat filter berubah. Export tetap mengambil semua data, bukan hanya halaman yang tampil.
+
+## Ulasan pembeli
+- Setelah pesanan online berstatus **Selesai**, halaman Antrian/Pesananku menampilkan kartu "Gimana belanjanya?": bintang 1–5, pilihan cepat (mis. Stok sering habis, Antre lama), dan saran opsional. Bisa dilewati; batas 14 hari sejak pesan.
+- Ulasan disimpan di kolom `orders.review` (JSONB, dibuat otomatis saat server start) dan **hanya dilihat admin**: kartu **Kepuasan pembeli** di Dashboard, tanda bintang di Riwayat, dan sheet "Ulasan 30 hari" di Export Dashboard.
+- Ulasan 1–2 bintang langsung dikirim sebagai notifikasi ke HP admin.

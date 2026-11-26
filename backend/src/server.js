@@ -72,6 +72,7 @@ const mapOrder = (r) => ({
   paidAt: r.paid_at ? new Date(r.paid_at).toISOString() : null, stage: r.stage,
   slot: r.slot, note: r.note, cashIn: r.cash_in, change: r.change_amt,
   subtotal: r.subtotal == null ? r.total : r.subtotal, diskon: r.diskon || [], voucher: r.voucher || '',
+  review: r.review || null,
 });
 const mapPublicOrder = (r) => {
   const o = mapOrder(r);
@@ -380,6 +381,30 @@ app.get('/api/orders/queue', ah(async (req, res) => {
       slot: r.slot,
     })),
   });
+}));
+
+/* Publik: ulasan untuk pesanan online milik HP ini yang sudah selesai (dibuktikan dengan token pesanan). */
+const ULASAN_TAGS = ['Barang lengkap', 'Siap tepat waktu', 'Harga pas', 'Pelayanan ramah', 'Stok sering habis', 'Antre lama', 'Harga kemahalan', 'Pesanan kurang/salah'];
+app.post('/api/orders/:id/review', ah(async (req, res) => {
+  const b = req.body || {};
+  const tokens = Array.isArray(b.tokens) ? b.tokens.filter((t) => typeof t === 'string').slice(0, 50) : [];
+  const bintang = Math.round(Number(b.bintang));
+  if (!(bintang >= 1 && bintang <= 5)) throw bad('Pilih bintang 1 sampai 5.');
+  const tags = [...new Set((Array.isArray(b.tags) ? b.tags : []).filter((t) => ULASAN_TAGS.includes(t)))];
+  const saran = str(b.saran, 200);
+  const { rows } = await db.query('SELECT * FROM orders WHERE id = $1 AND public_token = ANY($2)', [req.params.id, tokens]);
+  const o = rows[0];
+  if (!o) throw new HttpError(404, 'Pesanan tidak ditemukan.');
+  if (o.stage !== 3) throw bad('Ulasan bisa diberikan setelah pesanan selesai.');
+  if (Date.now() - new Date(o.created_at).getTime() > 14 * 864e5) throw bad('Batas memberi ulasan pesanan ini sudah lewat.');
+  const pertama = !o.review;
+  const review = { bintang, tags, saran, at: new Date().toISOString() };
+  const r = await db.query('UPDATE orders SET review = $2 WHERE id = $1 RETURNING *', [o.id, JSON.stringify(review)]);
+  res.json({ order: mapPublicOrder(r.rows[0]) });
+  if (pertama && bintang <= 2) {
+    pushAdmins({ title: 'Ulasan ' + bintang + ' bintang · ' + o.customer_name, body: [tags.join(', '), saran].filter(Boolean).join(' · ') || 'Tanpa keterangan', tag: 'rv-' + o.id, url: '/#dashboard' })
+      .catch((e) => console.error('Push gagal:', e.message));
+  }
 }));
 
 /* ---------- Pembayaran QRIS Midtrans ---------- */

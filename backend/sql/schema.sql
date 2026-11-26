@@ -159,3 +159,6 @@ CREATE TABLE IF NOT EXISTS routine_done (
   k   TEXT PRIMARY KEY,
   at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Ulasan pembeli (bintang 1-5, pilihan cepat, saran) disimpan di pesanannya; hanya dilihat admin.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS review JSONB;
