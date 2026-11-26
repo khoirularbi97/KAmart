@@ -1565,7 +1565,7 @@ function exportSpec(view){
       xSheet('Riwayat',xOrderCols.concat([['Waktu ambil'],['Catatan'],['Diskon','rp'],['Voucher']]),l.map(o=>xOrderRow(o).concat([o.slot||'',o.note||'',sum(o.diskon||[],d=>+d.nilai||0),o.voucher||''])),{total:[6,7,8,9,15]}),
       xKV('Ringkasan',[['Pesanan',l.length,'n'],['Dibatalkan',l.length-ok.length,'n'],['Omzet (tanpa batal)',sum(ok,o=>+o.total||0)],['Untung',sum(ok,profit)],['Belum dibayar',sum(ok.filter(o=>!o.paid),o=>+o.total||0)]])]}}
   if(view==='kasir'&&S.ktab==='tutup'){const h=(S.cashclose||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    return{file:'tutup-kasir-'+t,title:'Tutup Kasir',sub:'Per '+tglJam(now),sheets:[xSheet('Tutup kasir',[['Tanggal'],['Modal awal','rp'],['Penjualan tunai','rp'],['Pelunasan kasbon','rp'],['Belanja stok dari laci','rp'],['Uang keluar lain','rp'],['Seharusnya','rp'],['Dihitung','rp'],['Selisih','rp'],['Keterangan']],
+    return{file:'tutup-kasir-'+t,title:'Tutup Kasir',sub:'Per '+tglJam(now),sheets:[xSheet('Tutup kasir',[['Tanggal'],['Modal awal','rp'],['Penjualan tunai','rp'],['Pelunasan bayar nanti / kasbon (tunai)','rp'],['Belanja stok dari laci','rp'],['Uang keluar lain','rp'],['Seharusnya','rp'],['Dihitung','rp'],['Selisih','rp'],['Keterangan']],
       h.map(x=>[xDate(String(x.date).slice(0,10)),+x.modal||0,+x.tunai||0,+x.kasbon||0,+x.belanja||0,+x.keluar||0,+x.seharusnya||0,+x.fisik||0,+x.selisih||0,[x.ketKeluar,x.catatan].filter(Boolean).join(' · ')]),{total:[8]})]}}
   if(view==='kasir'){const l=v.filter(o=>o.source==='kasir'&&sameDay(o.createdAt)).sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
     return{file:'kasir-'+t,title:'Transaksi Kasir',sub:'Hari ini, '+xDate(t),sheets:[
@@ -1696,23 +1696,32 @@ function ccInit(date){date=date||ymd(new Date());if(S.cc&&S.cc.date===date)retur
     :{date,modal:last?String(last.modal):'',keluar:'',ketKeluar:'',kasbonTunai:true,pec:{},catatan:'',add:{},saved:false};
   return S.cc}
 function ccData(date){const ok=valid().filter(o=>o.paid&&o.stage>=0&&payDay(o)===date);
-  return{tunaiL:ok.filter(o=>tipeOf(o)==='tunai'),kasbonL:ok.filter(o=>tipeOf(o)==='kasbon'),qrisL:ok.filter(o=>tipeOf(o)!=='tunai'&&tipeOf(o)!=='kasbon'),
+  return{tunaiL:ok.filter(o=>tipeOf(o)==='tunai'),kasbonL:ok.filter(o=>tipeOf(o)==='kasbon'||tipeOf(o)==='manual'),qrisL:ok.filter(o=>!['tunai','kasbon','manual'].includes(tipeOf(o))),
     belumL:valid().filter(o=>!o.paid&&tipeOf(o)==='tunai'&&ymd(new Date(o.createdAt))===date),
     belanjaL:S.stockin.filter(x=>x.sumber==='laci'&&String(x.date).slice(0,10)===date)}}
 function ccFisik(c){return sum(PECAHAN,p=>p*(+c.pec[p]||0))+(+c.pec.koin||0)}
 function ccCalc(){const c=ccInit(S.cc&&S.cc.date),d=ccData(c.date),tunai=sum(d.tunaiL,o=>+o.total||0),kasbon=c.kasbonTunai?sum(d.kasbonL,o=>+o.total||0):0,modal=+c.modal||0,keluar=+c.keluar||0,belanja=sum(d.belanjaL,x=>(+x.qty||0)*(+x.harga||0));
   const seharusnya=modal+tunai+kasbon-keluar-belanja,fisik=ccFisik(c),adaFisik=PECAHAN.some(p=>c.pec[p]!==undefined&&c.pec[p]!=='')||(c.pec.koin!==undefined&&c.pec.koin!=='');
   return{c,d,tunai,kasbon,modal,keluar,belanja,seharusnya,fisik,adaFisik,selisih:fisik-seharusnya}}
+/* Rincian transaksi tutup kasir: supaya bisa dicocokkan satu per satu dengan Riwayat */
+function ccRincian(k){const date=k.c.date,grp=[['Tunai lunas (masuk laci)',k.d.tunaiL],['Pelunasan bayar nanti / kasbon'+(k.c.kasbonTunai?' (masuk laci)':' (tidak masuk laci)'),k.d.kasbonL],['QRIS (tidak masuk laci)',k.d.qrisL]].filter(g=>g[1].length);
+  if(!grp.length)return '';
+  const lain=[...k.d.tunaiL,...k.d.kasbonL,...k.d.qrisL].filter(o=>ymd(new Date(o.createdAt))!==date).length;
+  return '<details class="ccrinci"><summary>Rincian '+(k.d.tunaiL.length+k.d.kasbonL.length+k.d.qrisL.length)+' transaksi lunas tanggal ini</summary>'+
+   (lain?'<small style="color:var(--warn);display:block;margin:6px 0">'+lain+' transaksi dipesan di hari lain tapi lunas tanggal ini. Tutup kasir menghitung uang berdasarkan tanggal <b>lunas</b>, sedangkan Riwayat “Hari ini” berdasarkan tanggal <b>pesan</b>.</small>':'')+
+   grp.map(([t,l])=>'<div class="ccgrp"><b>'+t+' · '+rp(sum(l,o=>+o.total||0))+'</b>'+l.slice().sort((a,b)=>String(a.paidAt||a.createdAt).localeCompare(String(b.paidAt||b.createdAt))).map(o=>{const beda=ymd(new Date(o.createdAt))!==date;
+     return '<div class="li"><span style="min-width:0"><span>'+esc(o.customerName||'Pembeli umum')+'</span><br><small style="color:var(--muted)">'+esc(o.code||'')+' · '+esc(payLabel(o.pay))+' · '+new Date(o.paidAt||o.createdAt).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(beda?' · <span style="color:var(--warn);font-weight:700">dipesan '+esc(dLabel(o.createdAt).split(',')[0])+'</span>':'')+'</small></span><span class="num">'+rp(o.total)+'</span></div>'}).join('')+'</div>').join('')+'</details>'}
 function ccSummaryHtml(){const k=ccCalc(),row=(l,v,cls,sub)=>'<div class="arow'+(cls?' '+cls:'')+'"><span>'+l+(sub?'<br><small style="color:var(--muted);font-weight:400">'+sub+'</small>':'')+'</span><b class="num">'+v+'</b></div>';
   let h='<div class="arus">'+row('Modal awal laci',rp(k.modal),'','uang kembalian di awal hari')+
     row('+ Penjualan tunai lunas',rp(k.tunai),'',k.d.tunaiL.length+' transaksi (kasir & online)')+
-    (k.d.kasbonL.length?row('+ Pelunasan kasbon',rp(k.kasbon),'',k.d.kasbonL.length+' pelunasan'+(k.c.kasbonTunai?' dibayar tunai':' tidak tunai, tidak dihitung')):'')+
+    (k.d.kasbonL.length?row('+ Pelunasan bayar nanti / kasbon',rp(k.kasbon),'',k.d.kasbonL.length+' transaksi'+(k.c.kasbonTunai?' dibayar tunai':' tidak tunai, tidak dihitung')):'')+
     (k.d.belanjaL.length?row('− Belanja stok dari laci',rp(k.belanja),'',esc(k.d.belanjaL.map(x=>{const p=prod(x.kode);return (p?p.name:x.kode)+' ×'+x.qty}).join(', '))):'')+
     (k.keluar?row('− Uang keluar lainnya',rp(k.keluar),'',esc(k.c.ketKeluar||'')):'')+
     row('= Seharusnya ada di laci',rp(k.seharusnya),'tot')+
     row('Uang dihitung',k.adaFisik?rp(k.fisik):'—')+
     (k.adaFisik?row('Selisih',(k.selisih<0?'−':k.selisih>0?'+':'')+rp(Math.abs(k.selisih)),k.selisih?'bad':'ok'):'')+'</div>';
-  if(k.d.qrisL.length)h+='<small style="color:var(--muted)">QRIS/non-tunai hari ini '+rp(sum(k.d.qrisL,o=>+o.total||0))+' ('+k.d.qrisL.length+' transaksi) tidak masuk laci; cocokkan dengan mutasi di aplikasi pembayaran.</small>';
+  if(k.d.qrisL.length)h+='<small style="color:var(--muted)">QRIS hari ini '+rp(sum(k.d.qrisL,o=>+o.total||0))+' ('+k.d.qrisL.length+' transaksi) tidak masuk laci; cocokkan dengan mutasi di aplikasi pembayaran.</small>';
+  h+=ccRincian(k);
   if(k.d.belumL.length)h+='<small style="color:var(--warn)">'+k.d.belumL.length+' pesanan tunai hari ini belum ditandai lunas ('+rp(sum(k.d.belumL,o=>+o.total||0))+'). Kalau uangnya sudah diterima, tandai lunas dulu.</small>';
   if(!k.adaFisik)return h+'<div class="banner b-lav" style="font-size:13px">Hitung uang di laci per pecahan, nanti selisihnya muncul di sini.</div>';
   if(!k.selisih)return h+'<div class="banner b-mint" style="font-size:13px;color:var(--ok)"><b>Pas.</b> Uang di laci sama dengan catatan.</div>';
@@ -1733,7 +1742,7 @@ function vTutupKasir(){let cpg;const c=ccInit(S.cc&&S.cc.date),hist=(S.cashclose
     '<label class="f">Tanggal<input class="in" type="date" id="cc-date" value="'+esc(c.date)+'" max="'+ymd(new Date())+'"></label>'+
     '<div class="grid g2" style="gap:10px"><label class="f">Modal awal laci (Rp)'+num('cc-modal','modal',c.modal)+'</label><label class="f">Uang keluar lainnya (Rp)'+num('cc-keluar','keluar',c.keluar)+'</label></div>'+
     '<label class="f">Keterangan uang keluar<input class="in" id="cc-ket" data-cc="ketKeluar" value="'+esc(c.ketKeluar)+'" placeholder="mis. beli es batu, gas (belanja stok tidak perlu, sudah otomatis)"></label>'+
-    (ccData(c.date).kasbonL.length?'<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cc-kb" data-cck="1"'+(c.kasbonTunai?' checked':'')+'> Pelunasan kasbon hari ini dibayar tunai (masuk laci)</label>':'')+
+    (ccData(c.date).kasbonL.length?'<label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cc-kb" data-cck="1"'+(c.kasbonTunai?' checked':'')+'> Pelunasan bayar nanti / kasbon hari ini dibayar tunai (masuk laci)</label>':'')+
     '<div><p class="lbl" style="margin:4px 0 8px;font-weight:700;font-size:13px">Hitung uang di laci</p><div class="pec">'+PECAHAN.map(p=>'<label class="pc"><span>'+rp(p).replace('Rp','')+'</span>'+num('cc-p'+p,'pec.'+p,c.pec[p],'lembar')+'<small id="cc-s'+p+'" class="num">'+(+c.pec[p]?rp(p*(+c.pec[p])):'')+'</small></label>').join('')+
      '<label class="pc"><span>Koin (Rp)</span>'+num('cc-koin','pec.koin',c.pec.koin,'total koin')+'<small></small></label></div></div>'+
     '<div class="arow tot"><span>Total uang dihitung</span><b class="num" id="cc-fisik">'+rp(ccFisik(c))+'</b></div>'+
