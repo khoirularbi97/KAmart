@@ -370,7 +370,8 @@ function applyLayout(admin){
   const cur=parseFloat(document.documentElement.style.zoom||'1');
   if(Math.abs(cur-z)>.001)document.documentElement.style.zoom=z===1?'':String(z);
 }
-window.addEventListener('resize',()=>{clearTimeout(applyLayout.t);applyLayout.t=setTimeout(()=>{if(S.layout==='desktop')render()},150)});
+// Keyboard HP yang muncul juga memicu resize: jangan gambar ulang saat sedang mengetik, supaya keyboard tidak tertutup.
+window.addEventListener('resize',()=>{clearTimeout(applyLayout.t);applyLayout.t=setTimeout(()=>{const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;if(S.layout==='desktop')render()},150)});
 function salam(){const h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<18?'Selamat sore':'Selamat malam'}
 
 /* ---------- views ---------- */
@@ -1100,6 +1101,8 @@ async function doLogin(){const L=S.lg;S.busy=true;L.err='';render();
 
 const RENDER={rutin:vRutin,promo:vPromo,riwayat:vRiwayat,master:vMaster,tentang:vTentang,syarat:vSyarat,refund:vRefund,privasi:vPrivasi,toko:vToko,keranjang:vKeranjang,pesananku:vPesananku,akun:vAkun,dashboard:vDashboard,pesanan:vPesanan,kasir:vKasir,produk:vProduk,stok:vStok,kasbon:vKasbon,rekap:vRekap};
 function render(){
+  // Saat pembeli mengetik saran ulasan, jangan gambar ulang halaman (di HP keyboard akan tertutup); gambar ulang setelah selesai mengetik.
+  {const ae=document.activeElement;if(ae&&ae.dataset&&ae.dataset.rvsaran){S.rvDefer=true;return}}
   notifyNew();
   if(isAuthed()&&S.view==='pesanan'&&(S.loaded.orders||S.loaded.admin))markSeen();
   {const u=unseenOrders().length;document.title=(u?'('+u+') ':'')+'KAmart'}
@@ -1943,10 +1946,11 @@ function ulasanCard(o){S.rv=S.rv||{};const f=S.rv[o.id]||{b:0,tags:[],saran:''},
   return '<article class="card stack rvcard" style="gap:10px;padding:14px 16px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><span style="min-width:0"><b style="font-size:15px">Gimana belanjanya?</b><br><small style="color:var(--muted)">'+esc(o.code||'')+' · '+esc(itemsText(o))+'</small></span><button type="button" class="mbtn" data-rvskip="'+id+'" aria-label="Lewati ulasan">✕</button></div>'+
    '<div class="rvstars" role="radiogroup" aria-label="Beri bintang">'+[1,2,3,4,5].map(n=>'<button type="button" role="radio" aria-checked="'+(f.b===n)+'" aria-label="'+n+' bintang, '+BINTANG_TXT[n]+'" class="rvs'+(n<=f.b?' on':'')+'" data-rvb="'+id+'|'+n+'">★</button>').join('')+(f.b?'<span class="rvlbl">'+BINTANG_TXT[f.b]+'</span>':'')+'</div>'+
    (f.b?'<div class="rvtags">'+tags.map(t=>'<button type="button" class="rvtag'+(f.tags.includes(t)?' on':'')+(ULASAN_TAGS.kurang.includes(t)?' neg':'')+'" aria-pressed="'+f.tags.includes(t)+'" data-rvt="'+id+'|'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div>'+
-     '<textarea class="in" rows="2" maxlength="200" data-rvsaran="'+id+'" placeholder="Saran untuk toko (opsional)" style="height:auto;padding:10px 12px;resize:vertical">'+esc(f.saran)+'</textarea>'+
+     '<textarea class="in" id="rvs-'+id+'" rows="2" maxlength="200" data-rvsaran="'+id+'" placeholder="Saran untuk toko (opsional)" style="height:auto;padding:10px 12px;resize:vertical">'+esc(f.saran)+'</textarea>'+
      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><small style="color:var(--muted)">Hanya dibaca penjual, tidak tampil di toko.</small><button type="button" class="btn" data-rvsend="'+id+'"'+(S.rvBusy===o.id?' disabled':'')+'>'+(S.rvBusy===o.id?'Mengirim…':'Kirim ulasan')+'</button></div>'
     :'<small style="color:var(--muted)">Ketuk bintang. Ulasan hanya dibaca penjual, tidak tampil di toko.</small>')+'</article>'}
 async function saveUlasanDoc(o,review){const r=await api('POST','/api/orders/'+encodeURIComponent(o.id)+'/review',{tokens:ls.get('orders',[]),bintang:review.bintang,tags:review.tags,saran:review.saran});const i=S.mine.findIndex(x=>x.id===o.id);if(i>=0)S.mine[i]=r.order}
+document.addEventListener('focusout',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.rvsaran||!S.rvDefer)return;S.rvDefer=false;setTimeout(()=>{const ae=document.activeElement;if(!(ae&&ae.dataset&&ae.dataset.rvsaran))render()},400)});
 document.addEventListener('input',e=>{const t=e.target;if(!t.dataset||!t.dataset.rvsaran)return;S.rv=S.rv||{};const f=S.rv[t.dataset.rvsaran]=S.rv[t.dataset.rvsaran]||{b:0,tags:[],saran:''};f.saran=t.value});
 document.addEventListener('click',async e=>{const t=e.target.closest('[data-rvb],[data-rvt],[data-rvskip],[data-rvsend]');if(!t)return;const d=t.dataset;S.rv=S.rv||{};
   const get=id=>S.rv[id]=S.rv[id]||{b:0,tags:[],saran:''};
