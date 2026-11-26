@@ -329,3 +329,6 @@ serta domain/VPS 30, 7, dan 1 hari sebelum tanggal habis. Server mengecek tiap m
 - **Pembeli:** tombol **Unduh** di halaman **Akun**. File statis `frontend/panduan/panduan-pembeli.pdf` (ikut ter-deploy di Vercel).
 - **Admin:** tombol **Unduh** di halaman **Rutinitas**. File `backend/assets/panduan-admin.pdf` hanya bisa diunduh admin yang sudah masuk lewat `GET /api/admin/panduan`.
 - Kalau panduan diperbarui, ganti file PDF-nya dengan nama yang sama, naikkan `VERSION` di `frontend/sw.js`, lalu push. Untuk file admin, jalankan juga `git pull` di VPS.
+
+## Paginasi tabel
+Daftar panjang dibagi per halaman, dengan pilihan 10 / 25 / 50 / 100 baris (diingat per daftar di perangkat itu). Berlaku di Riwayat, Produk, Belum Bayar, riwayat Stok masuk, riwayat Stok opname, riwayat Tutup kasir, Per produk, dan Pengeluaran di Rekap. Halaman kembali ke 1 saat filter berubah. Export tetap mengambil semua data, bukan hanya halaman yang tampil.

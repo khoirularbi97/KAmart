@@ -311,6 +311,15 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
   .illu,.plant{display:none}
   .top h1{font-size:22px}
 }
+.pgbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding-top:12px;margin-top:4px;border-top:1px dashed #E6DAE8}
+.pginfo{font-size:12.5px;color:var(--muted)}.pginfo b{color:var(--ink)}
+.pgnums{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.pgb{min-width:34px;height:34px;padding:0 8px;border-radius:10px;border:1px solid #E6DAE8;background:#fff;color:var(--ink);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.pgb:hover:not(:disabled){border-color:var(--primary)}.pgb.on{background:var(--primary);border-color:var(--primary);color:#fff}.pgb:disabled{opacity:.4;cursor:default}
+.pgdot{padding:0 2px;color:var(--muted)}
+.pgsize{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}.pgsize .in{height:34px;width:auto;padding:0 8px;border-radius:10px}
+.compact .pgb{min-width:30px;height:30px}.compact .pgsize .in{height:30px}
+@media (max-width:520px){.pgbar{justify-content:center}.pginfo{width:100%;text-align:center}}
 /* Tampilan ringkas (admin) */
 .laysep{width:1px;align-self:stretch;margin:4px 2px;background:#E6DAE8}
 .compact{padding-block:10px}
