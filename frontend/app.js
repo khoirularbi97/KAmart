@@ -1934,8 +1934,9 @@ document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset||!t.da
 const ULASAN_TAGS={baik:['Barang lengkap','Siap tepat waktu','Harga pas','Pelayanan ramah'],kurang:['Stok sering habis','Antre lama','Harga kemahalan','Pesanan kurang/salah']};
 const ULASAN_HARI=14,BINTANG_TXT=['','Kecewa','Kurang','Cukup','Puas','Puas sekali'];
 function rvSkip(){try{return ls.get('ulasanSkip',[])||[]}catch(e){return[]}}
-function ulasanPending(){const lim=Date.now()-ULASAN_HARI*864e5,skip=rvSkip();
-  return myOrders().filter(o=>o.source==='online'&&o.stage===3&&!o.review&&!skip.includes(o.id)&&new Date(o.createdAt).getTime()>lim).slice(0,2)}
+// Hanya pesanan atas nama akun di HP ini (HP admin/HP bersama bisa menyimpan pesanan orang lain), dan tidak untuk admin yang sedang masuk.
+function ulasanPending(){if(isAuthed())return[];const lim=Date.now()-ULASAN_HARI*864e5,skip=rvSkip(),nm=String(S.co.name||'').trim().toLowerCase();if(!nm)return[];
+  return myOrders().filter(o=>o.source==='online'&&o.stage===3&&!o.review&&!skip.includes(o.id)&&String(o.customerName||'').trim().toLowerCase()===nm&&new Date(o.createdAt).getTime()>lim).slice(0,1)}
 const starsTxt=n=>'★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);
 function ulasanCard(o){S.rv=S.rv||{};const f=S.rv[o.id]||{b:0,tags:[],saran:''},id=esc(o.id);
   const tags=f.b?(f.b>=4?ULASAN_TAGS.baik:ULASAN_TAGS.kurang.concat(ULASAN_TAGS.baik)):[];
