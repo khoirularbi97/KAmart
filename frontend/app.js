@@ -1025,10 +1025,33 @@ function vProduk(){
 function vStok(){
   if(loading())return '<div class="card empty">Memuat stok…</div>';
   const f=S.sf,list=sortedProducts();if(!f.kode&&list[0]){f.kode=list[0].kode;if(!f.harga)f.harga=list[0].modal}
-  const all=S.stockin.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id),undefined,{numeric:true})),spg=pgSlice('stokmasuk',all,10),rows=spg.rows,ed=f.editId?S.stockin.find(x=>String(x.id)===String(f.editId)):null;
-  const mo=mk(new Date());
   if(S.stab==='opname')return stokTabs()+opnameView();
-  return stokTabs()+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start">'+
+  const mo=mk(new Date()),sh=S.sh=Object.assign({q:'',per:'bulan',bulan:mo,tempat:'',src:'all'},S.sh||{});
+  const lalu=(()=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return mk(d)})(),perMo=sh.per==='bulan'?mo:sh.per==='lalu'?lalu:sh.per==='pilih'?(sh.bulan||mo):'';
+  const tempatOf=x=>String(x.tempat||'').trim()||'(tanpa tempat)',qq=sh.q.trim().toLowerCase();
+  const inPer=S.stockin.filter(x=>!perMo||String(x.date).slice(0,7)===perMo);
+  const tempats=[...new Set(S.stockin.map(tempatOf))].sort((a,b)=>a.localeCompare(b));
+  const all=inPer.filter(x=>(!sh.tempat||tempatOf(x)===sh.tempat)&&(sh.src==='all'||(sh.src==='laci'?x.sumber==='laci':x.sumber!=='laci'))&&(!qq||[(prod(x.kode)||{}).name,x.kode,x.tempat].some(v=>String(v||'').toLowerCase().includes(qq))))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id),undefined,{numeric:true}));
+  const spg=pgSlice('stokmasuk',all,10,JSON.stringify(sh)),rows=spg.rows,ed=f.editId?S.stockin.find(x=>String(x.id)===String(f.editId)):null;
+  const tot=x=>(+x.qty||0)*(+x.harga||0),totAll=sum(all,tot),unit=sum(all,x=>+x.qty||0),laci=sum(all.filter(x=>x.sumber==='laci'),tot);
+  const bySup={};all.forEach(x=>{const k=tempatOf(x),r=bySup[k]=bySup[k]||{t:k,v:0,u:0,n:0,prods:new Set()};r.v+=tot(x);r.u+=+x.qty||0;r.n++;r.prods.add(x.kode)});
+  const sups=Object.values(bySup).sort((a,b)=>b.v-a.v),supMax=Math.max(1,...sups.map(x=>x.v)),perLbl=perMo?mLabel(perMo):'Semua waktu';
+  const chip=(v,t)=>'<button type="button" class="sg'+(sh.per===v?' on':'')+'" data-shper="'+v+'">'+t+'</button>';
+  const filt='<div class="card stack" style="gap:10px"><input class="in" id="sh-q" data-bind="sh.q" data-live="1" value="'+esc(sh.q)+'" placeholder="Cari produk, kode, atau tempat beli" aria-label="Cari stok masuk">'+
+   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><div class="seg" role="group" aria-label="Periode">'+chip('bulan','Bulan ini')+chip('lalu','Bulan lalu')+chip('semua','Semua')+chip('pilih','Pilih bulan')+'</div>'+
+    (sh.per==='pilih'?'<input class="in" type="month" id="sh-bulan" data-bind="sh.bulan" data-live="1" value="'+esc(sh.bulan||mo)+'" style="width:auto" aria-label="Bulan">':'')+'</div>'+
+   '<div class="rhf"><label class="f"><span class="sr">Tempat beli</span><select class="in" id="sh-tempat" data-bind="sh.tempat" data-live="1" aria-label="Tempat beli"><option value="">Semua tempat beli</option>'+tempats.map(t=>'<option'+(sh.tempat===t?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></label>'+
+    '<label class="f"><span class="sr">Dibayar dari</span><select class="in" id="sh-src" data-bind="sh.src" data-live="1" aria-label="Dibayar dari">'+[['all','Laci & uang lain'],['laci','Dari laci kasir'],['lain','Uang lain']].map(([v,t])=>'<option value="'+v+'"'+(sh.src===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label></div></div>';
+  const stats='<div class="grid g4 shstats">'+
+   '<div class="stat b-lav"><span class="lb">Total belanja</span><span class="vl num">'+rp(totAll)+'</span><span class="sm">'+esc(perLbl)+'</span></div>'+
+   '<div class="stat b-blue"><span class="lb">Jumlah barang</span><span class="vl num">'+unit.toLocaleString('id-ID')+'</span><span class="sm">'+all.length+' catatan belanja</span></div>'+
+   '<div class="stat b-gold"><span class="lb">Suplier</span><span class="vl num">'+sups.length+'</span><span class="sm">'+(sups[0]?'terbesar: '+esc(sups[0].t):'—')+'</span></div>'+
+   '<div class="stat b-pink"><span class="lb">Dari laci kasir</span><span class="vl num">'+rp(laci)+'</span><span class="sm">uang lain '+rp(totAll-laci)+'</span></div></div>';
+  const supCard='<div class="card"><div class="ch"><div><h3>Ringkasan per suplier</h3><p>'+esc(perLbl)+(sh.tempat||sh.q||sh.src!=='all'?' · sesuai filter':'')+'</p></div></div>'+
+   (sups.length?sups.map(r=>'<div class="supr"><div class="suph"><b>'+esc(r.t)+'</b><b class="num">'+rp(r.v)+'</b></div><i class="supbar"><em style="width:'+Math.round(r.v/supMax*100)+'%"></em></i><small>'+r.n+' catatan · '+r.u.toLocaleString('id-ID')+' barang · '+r.prods.size+' produk · '+Math.round(r.v/(totAll||1)*100)+'% dari total</small></div>').join('')
+    :'<div class="empty">Tidak ada belanja di periode/filter ini.</div>')+'</div>';
+  return stokTabs()+'<div class="stack">'+filt+stats+'<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start"><div class="stack">'+
   '<form id="sForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>'+(ed?'Ubah catatan belanja':'Catat belanja ke grosir')+'</h3><p>'+(ed?'Stok produk ikut menyesuaikan':'Stok bertambah otomatis')+'</p></div>'+(ed?'<button type="button" class="btn3" data-act="sicancel">Batal</button>':'')+'</div><div class="fg">'+
    '<label class="f">Tanggal<input class="in" id="s-date" type="date" data-bind="sf.date" required value="'+esc(f.date)+'"></label>'+
    '<label class="f">Produk<select class="in" id="s-kode" data-bind="sf.kode" data-live="1">'+list.map(p=>'<option value="'+esc(p.kode)+'"'+(f.kode===p.kode?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'</select></label>'+
@@ -1039,15 +1062,17 @@ function vStok(){
    '<small style="color:var(--muted)">'+(f.sumber==='laci'?'Total belanja otomatis dikurangkan di Tutup kasir tanggal ini.':'Tidak memengaruhi uang di laci (mis. uang pribadi / transfer).')+'</small></div></div>'+
    '<small style="color:var(--muted)">Harga modal produk otomatis menjadi rata-rata dari sisa stok dan belanja ini.</small>'+
    '<div class="banner b-lav" style="display:flex;justify-content:space-between;font-weight:700"><span>Total belanja</span><span class="num">'+rp((+f.qty||0)*(+f.harga||0))+'</span></div>'+
-   '<div><button class="btn" type="submit"'+(list.length&&!S.busy?'':' disabled')+'>'+(ed?'Simpan perubahan':'Simpan &amp; tambah stok')+'</button></div></form>'+
-  '<div class="card"><div class="ch"><div><h3>Riwayat belanja</h3><p>'+mLabel(mo)+': '+rp(sum(S.stockin.filter(x=>String(x.date).slice(0,7)===mo),x=>(+x.qty||0)*(+x.harga||0)))+'</p></div></div>'+
+   '<div><button class="btn" type="submit"'+(list.length&&!S.busy?'':' disabled')+'>'+(ed?'Simpan perubahan':'Simpan &amp; tambah stok')+'</button></div></form>'+supCard+'</div>'+
+  '<div class="card"><div class="ch"><div><h3>Riwayat belanja</h3><p>'+esc(perLbl)+': '+rp(totAll)+' · '+all.length+' catatan</p></div>'+(sh.q||sh.tempat||sh.src!=='all'||sh.per!=='bulan'?'<button type="button" class="btn3 sm" data-shreset="1">Reset filter</button>':'')+'</div>'+
    (rows.length?rows.map(x=>{const p=prod(x.kode),id=esc(String(x.id)),on=ed&&String(ed.id)===String(x.id),cf=S.sidel===String(x.id);
      return '<div class="li sirow'+(on?' on':'')+'"><span style="min-width:0"><b>'+esc(p?p.name:x.kode)+' · +'+(+x.qty||0)+'</b><br><small style="color:var(--muted)">'+esc(x.date)+(x.tempat?' · '+esc(x.tempat):'')+' · '+rp(x.harga)+'/unit'+(x.sumber==='laci'?' · <span style="color:var(--primary-ink);font-weight:700">dari laci</span>':'')+'</small></span>'+
        '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><b class="num">'+rp((+x.qty||0)*(+x.harga||0))+'</b><span style="display:flex;gap:6px">'+
        '<button type="button" class="btn3 sm" data-siedit="'+id+'"'+(on?' disabled':'')+'>Ubah</button>'+(cf?'<button type="button" class="btn3 sm dang" data-sidelok="'+id+'">Ya, hapus</button>':'<button type="button" class="btn3 sm dang" data-sidel="'+id+'">Hapus</button>')+'</span></span></div>'}).join('')+
      spg.bar
-    :'<div class="empty">Belum ada catatan belanja.</div>')+'</div></div>';
+    :'<div class="empty">'+(S.stockin.length?'Tidak ada catatan yang cocok dengan filter.':'Belum ada catatan belanja.')+'</div>')+'</div></div></div>';
 }
+document.addEventListener('click',e=>{const t=e.target.closest('[data-shper],[data-shreset]');if(!t)return;S.sh=S.sh||{};
+  if(t.dataset.shreset){S.sh={q:'',per:'bulan',bulan:mk(new Date()),tempat:'',src:'all'}}else S.sh.per=t.dataset.shper;render()});
 
 function vKasbon(){
   if(loading())return '<div class="card empty">Memuat kasbon…</div>';

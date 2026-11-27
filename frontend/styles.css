@@ -333,6 +333,11 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .bdn,.bdx{display:flex;flex-direction:column}.bdx{align-items:flex-end}.bdn small,.bdx small{color:var(--muted);font-size:11.5px}
 .bdsum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;padding-top:12px;border-top:1px dashed #E6DAE8}.bdsum span{display:flex;flex-direction:column;background:#FAF7FC;border-radius:12px;padding:8px 12px}.bdsum small{color:var(--muted);font-size:11.5px}.bdsum b{font-size:16px}
 .compact .bdonut{width:116px;height:116px}
+.supr{padding:10px 0;border-bottom:1px dashed #EDE4EF;display:flex;flex-direction:column;gap:5px}.supr:last-child{border-bottom:0}.suph{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}.supr small{color:var(--muted);font-size:11.5px}
+.supbar{display:block;height:7px;border-radius:99px;background:#F1EAF4;overflow:hidden}.supbar em{display:block;height:100%;border-radius:99px;background:var(--primary)}
+.shstats .stat{padding:14px}.shstats .vl{font-size:clamp(16px,4.2vw,22px);overflow-wrap:anywhere}
+@media (max-width:860px){.shstats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.force-mobile .shstats{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* Tampilan ringkas (admin) */
 .laysep{width:1px;align-self:stretch;margin:4px 2px;background:#E6DAE8}
 .compact{padding-block:10px}
