@@ -313,10 +313,15 @@ function renderShell(){
   document.getElementById('top').innerHTML='<div><h1>'+v.t+'</h1><div class="sub">'+subs[v.id]+'</div></div>'+
     '<div class="tbtns">'+(v.g==='Admin'?layoutSwitch()+'<button class="btn2" data-act="refresh" aria-label="Muat ulang data"'+(S.refreshing?' disabled':'')+'>'+(S.refreshing?'Memuat…':'↻ Muat ulang')+'</button>':'')+(v.g==='Admin'?'<button class="cbtn'+(unseenOrders().length?' ring-on':'')+'" data-go="pesanan" aria-label="Pesanan baru: '+nNew+'">'+ic('bell')+(nNew?'<em>'+nNew+'</em>':'')+'</button>':'')+
     (v.g==='Admin'&&isAuthed()?'<button class="btn2" data-act="xopen">'+ic('down',16)+'Export</button>':'')+'<button class="btn2" data-go="'+(v.g==='Admin'?'toko':'dashboard')+'">'+(v.g==='Admin'?'Lihat toko':'Masuk admin')+'</button>'+(v.g==='Admin'?'<button class="btn2" data-act="logout">Keluar</button>':'')+'</div>';
-  const pillIds=v.g==='Admin'?['dashboard','pesanan','riwayat','kasir','produk','promo','stok','kasbon','rekap','master']:['toko'];
-  document.getElementById('pill').innerHTML='<div class="track">'+pillIds.map(id=>{const x=VIEWS.find(y=>y.id===id),b=badgeFor(id);return '<button class="pb'+(S.view===id?' on':'')+'" data-go="'+id+'">'+x.t+(b?'<em>'+b+'</em>':'')+'</button>'}).join('')+
+  const pillIds=v.g==='Admin'?['dashboard','pesanan','riwayat','kasir','produk','promo','stok','kasbon','rekap','rutin','master']:['toko'];
+  const pillEl=document.getElementById('pill'),oldTr=pillEl.querySelector('.track'),oldX=oldTr?oldTr.scrollLeft:0;
+  pillEl.innerHTML='<div class="track">'+pillIds.map(id=>{const x=VIEWS.find(y=>y.id===id),b=badgeFor(id);return '<button class="pb'+(S.view===id?' on':'')+'" data-go="'+id+'">'+x.t+(b?'<em>'+b+'</em>':'')+'</button>'}).join('')+
     (v.g==='Admin'?'':'<button class="pb" data-go="dashboard">Admin</button>')+'</div>'+
     '<button class="plus" data-go="'+(v.g==='Admin'?'kasir':'toko')+'" aria-label="'+(v.g==='Admin'?'Transaksi baru di kasir':'Belanja')+'">'+ic('plus',22,2.4)+'</button>';
+  // Navigasi bawah: pertahankan posisi geser, dan saat pindah halaman geser supaya menu aktif terlihat.
+  const tr=pillEl.querySelector('.track'),on=tr&&tr.querySelector('.pb.on');
+  if(tr){tr.scrollLeft=oldX;if(on&&renderShell.pv!==S.view)requestAnimationFrame(()=>{tr.scrollLeft=Math.max(0,on.offsetLeft-(tr.clientWidth-on.offsetWidth)/2)})}
+  renderShell.pv=S.view;
 }
 /* ---------- notifikasi pesanan masuk ---------- */
 const adminView=()=>VIEWS.find(x=>x.id===S.view).g==='Admin';
