@@ -338,6 +338,18 @@ td{padding:10px 8px;border-top:1px solid var(--line);vertical-align:middle}
 .shstats .stat{padding:14px}.shstats .vl{font-size:clamp(16px,4.2vw,22px);overflow-wrap:anywhere}
 @media (max-width:860px){.shstats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .force-mobile .shstats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pbadge.flash{background:linear-gradient(90deg,#FF5A5F,#FF9F1C);color:#fff}
+.flashsec{border-radius:22px;padding:14px 14px 16px;background:linear-gradient(135deg,#FF5A5F 0%,#FF8A3D 60%,#FFB938 100%);color:#fff;box-shadow:0 14px 30px rgba(255,90,95,.28)}
+.fhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}.fhead>b{font-size:18px;letter-spacing:.2px}
+.fcd{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}.fcd .num{background:#2B1B5A;color:#fff;border-radius:8px;padding:3px 8px;font-weight:800;font-size:13px;letter-spacing:.5px}
+.ftrack{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:2px;scrollbar-width:none}.ftrack::-webkit-scrollbar{display:none}
+.fcard{flex:0 0 148px;scroll-snap-align:start;background:#fff;color:var(--ink);border-radius:16px;padding:8px;display:flex;flex-direction:column;gap:4px}
+.fcard.habis{opacity:.7}.fph{position:relative;height:96px;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}.fph img{width:100%;height:100%;object-fit:contain}
+.fdisc{position:absolute;top:6px;left:6px;background:#FF5A5F;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:2px 6px}
+.fnm{font-size:13px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:32px}
+.fpr{font-weight:800;color:#E5484D;font-size:15px}.fpr s{color:var(--muted);font-weight:500;font-size:11px}
+.fbar{position:relative;display:block;height:16px;border-radius:99px;background:#FFE3DF;overflow:hidden}.fbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#FF5A5F,#FF9F1C);border-radius:99px}.fbar em{position:relative;display:block;text-align:center;font-style:normal;font-size:10px;font-weight:800;line-height:16px;color:#7A1F12}
+.fnote{font-size:10.5px;color:var(--muted)}.fact{display:flex;justify-content:flex-end;margin-top:auto}
 /* Tampilan ringkas (admin) */
 .laysep{width:1px;align-self:stretch;margin:4px 2px;background:#E6DAE8}
 .compact{padding-block:10px}

@@ -338,3 +338,8 @@ Daftar panjang dibagi per halaman, dengan pilihan 10 / 25 / 50 / 100 baris (diin
 - Setelah pesanan online berstatus **Selesai**, halaman Antrian/Pesananku menampilkan kartu "Gimana belanjanya?": bintang 1–5, pilihan cepat (mis. Stok sering habis, Antre lama), dan saran opsional. Hanya untuk pesanan atas nama akun di HP itu (bukan pesanan orang lain yang dibuat dari HP yang sama), tidak muncul saat admin sedang masuk, satu kartu sekali tampil. Bisa dilewati; batas 14 hari sejak pesan.
 - Ulasan disimpan di kolom `orders.review` (JSONB, dibuat otomatis saat server start) dan **hanya dilihat admin**: kartu **Kepuasan pembeli** di Dashboard, tanda bintang di Riwayat, dan sheet "Ulasan 30 hari" di Export Dashboard.
 - Ulasan 1–2 bintang langsung dikirim sebagai notifikasi ke HP admin.
+
+## Flash sale
+- Menu **Promo → + Flash sale**: pilih produk, harga flash, **kuota unit** (0 = tanpa batas), **maks per pesanan** (0 = tanpa batas), serta waktu mulai & selesai (wajib; ada tombol cepat "1 jam", "12.00–13.00", dll.).
+- Di toko muncul bagian **⚡ Flash Sale** di atas banner, dengan hitung mundur, bar sisa kuota, dan tombol tambah ke keranjang. Flash sale yang mulai dalam 24 jam tampil sebagai "Mulai dalam…".
+- Dihitung di server (mesin promo yang sama dengan frontend): potongan masuk sebagai baris diskon `tipe: 'flash'` berisi `qty`. Kuota dikunci per transaksi supaya tidak terlampaui saat banyak yang pesan bersamaan. Unit di atas kuota/batas dihitung harga normal. Pesanan batal mengembalikan kuota. Berlaku juga di kasir.

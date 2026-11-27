@@ -1,8 +1,8 @@
 /* Promo & diskon KAmart.
- * Jenis: produk (harga coret), bundling (beli X harga khusus / gratis), minimal (diskon minimal belanja), voucher (kode).
+ * Jenis: produk (harga coret), flash (flash sale: harga khusus singkat + kuota), bundling (beli X harga khusus / gratis), minimal (diskon minimal belanja), voucher (kode).
  * hitungPromo() HARUS sama persis dengan salinannya di frontend (kamart.html), supaya angka di keranjang = angka di server. */
 
-const TIPE = ['produk', 'bundling', 'bonus', 'minimal', 'voucher'];
+const TIPE = ['produk', 'flash', 'bundling', 'bonus', 'minimal', 'voucher'];
 
 /* ===== MULAI: mesin hitung (salinan identik di frontend) ===== */
 function promoAktif(p, now) {
@@ -32,7 +32,22 @@ function hitungPromo(lines, promos, opt) {
     return Object.assign({}, l, { price, normal, promoId });
   });
   const diskon = [];
+  // Flash sale: harga khusus dalam waktu singkat, dibatasi kuota total (p.kuota) dan batas per pesanan (p.batas).
+  const flashKode = new Set();
   items.forEach((l) => {
+    let best = null;
+    act.filter((p) => p.tipe === 'flash' && p.kode === l.kode && +p.harga >= 0 && +p.harga < l.price).forEach((p) => {
+      const used = opt.flashUsed ? (+opt.flashUsed(p) || 0) : (+p.terjual || 0);
+      let n = l.qty;
+      if (+p.batas > 0) n = Math.min(n, Math.floor(+p.batas));
+      if (+p.kuota > 0) n = Math.min(n, Math.max(0, Math.floor(+p.kuota) - used));
+      const d = n * (l.price - +p.harga);
+      if (n > 0 && d > 0 && (!best || d > best.nilai)) best = { id: p.id, nama: p.nama, tipe: 'flash', nilai: d, qty: n, kode: l.kode };
+    });
+    if (best) { diskon.push(best); flashKode.add(l.kode); }
+  });
+  items.forEach((l) => {
+    if (flashKode.has(l.kode)) return;
     let best = null;
     act.filter((p) => p.tipe === 'bundling' && p.kode === l.kode).forEach((p) => {
       const x = Math.max(1, Math.floor(+p.qty || 0));
@@ -118,6 +133,12 @@ function sanitize(b, productKodes) {
   if (tipe === 'produk') {
     p.kode = needKode();
     p.harga = n0(b.harga, 100000000);
+  } else if (tipe === 'flash') {
+    p.kode = needKode();
+    p.harga = n0(b.harga, 100000000);
+    if (!p.mulai || !p.selesai) throw new PromoError('Flash sale wajib punya waktu mulai dan selesai.');
+    p.kuota = n0(b.kuota, 100000);
+    p.batas = n0(b.batas, 100);
   } else if (tipe === 'bundling') {
     p.kode = needKode();
     p.mode = b.mode === 'gratis' ? 'gratis' : 'harga';

@@ -145,7 +145,15 @@ function orderCode() {
  */
 async function loadPromos(q) {
   const { rows } = await q.query('SELECT id, data FROM promos ORDER BY created_at');
-  return rows.map((r) => Object.assign({ id: r.id }, r.data));
+  const list = rows.map((r) => Object.assign({ id: r.id }, r.data));
+  if (list.some((p) => p.tipe === 'flash')) await isiTerjualFlash(q, list);
+  return list;
+}
+// Jumlah unit yang sudah terjual dengan harga flash sale (pesanan batal tidak dihitung).
+async function isiTerjualFlash(q, list) {
+  const { rows } = await q.query("SELECT e->>'id' AS id, sum((e->>'qty')::int)::int AS n FROM orders, jsonb_array_elements(diskon) e WHERE stage >= 0 AND e->>'tipe' = 'flash' GROUP BY 1");
+  const m = new Map(rows.map((r) => [r.id, r.n]));
+  list.forEach((p) => { if (p.tipe === 'flash') p.terjual = m.get(p.id) || 0; });
 }
 const rpTxt = (n) => 'Rp' + Number(n).toLocaleString('id-ID');
 
@@ -189,8 +197,14 @@ async function createOrder({ items, source, customerName, customerLine, pay, slo
         }
       }
     }
-    // Produk bonus (promo "beli X bonus Y") ikut dikunci supaya stoknya aman.
     const now = new Date();
+    // Flash sale: kunci promonya lalu hitung ulang yang sudah terjual, supaya kuota tidak terlampaui saat banyak yang pesan bersamaan.
+    const flashIds = promos.filter((x) => x.tipe === 'flash' && promo.promoAktif(x, now) && qtyByKode.has(x.kode)).map((x) => x.id);
+    if (flashIds.length) {
+      await client.query('SELECT id FROM promos WHERE id = ANY($1) ORDER BY id FOR UPDATE', [flashIds]);
+      await isiTerjualFlash(client, promos);
+    }
+    // Produk bonus (promo "beli X bonus Y") ikut dikunci supaya stoknya aman.
     const bonusKodes = [...new Set(promos.filter((x) => x.tipe === 'bonus' && promo.promoAktif(x, now) && qtyByKode.has(x.kode))
       .map((x) => x.bonusKode).filter((k) => k && !byKode.has(k)))];
     if (bonusKodes.length) {

@@ -160,7 +160,22 @@ function hitungPromo(lines, promos, opt) {
     return Object.assign({}, l, { price, normal, promoId });
   });
   const diskon = [];
+  // Flash sale: harga khusus dalam waktu singkat, dibatasi kuota total (p.kuota) dan batas per pesanan (p.batas).
+  const flashKode = new Set();
   items.forEach((l) => {
+    let best = null;
+    act.filter((p) => p.tipe === 'flash' && p.kode === l.kode && +p.harga >= 0 && +p.harga < l.price).forEach((p) => {
+      const used = opt.flashUsed ? (+opt.flashUsed(p) || 0) : (+p.terjual || 0);
+      let n = l.qty;
+      if (+p.batas > 0) n = Math.min(n, Math.floor(+p.batas));
+      if (+p.kuota > 0) n = Math.min(n, Math.max(0, Math.floor(+p.kuota) - used));
+      const d = n * (l.price - +p.harga);
+      if (n > 0 && d > 0 && (!best || d > best.nilai)) best = { id: p.id, nama: p.nama, tipe: 'flash', nilai: d, qty: n, kode: l.kode };
+    });
+    if (best) { diskon.push(best); flashKode.add(l.kode); }
+  });
+  items.forEach((l) => {
+    if (flashKode.has(l.kode)) return;
     let best = null;
     act.filter((p) => p.tipe === 'bundling' && p.kode === l.kode).forEach((p) => {
       const x = Math.max(1, Math.floor(+p.qty || 0));
@@ -215,26 +230,32 @@ function hitungPromo(lines, promos, opt) {
   return { items, subtotal, diskon, bonus, totalDiskon: subtotal - sisa, total: Math.max(0, sisa), voucherErr };
 }
 
-const PTIPE={produk:'Harga coret',bundling:'Beli X',bonus:'Beli X bonus Y',minimal:'Minimal belanja',voucher:'Voucher'};
+const PTIPE={produk:'Harga coret',flash:'Flash sale',bundling:'Beli X',bonus:'Beli X bonus Y',minimal:'Minimal belanja',voucher:'Voucher'};
 const promoList=()=>(S.token&&S.loaded&&S.loaded.admin?S.promos:(S.pubPromos||S.promos||[]))||[];
 function vch(sc,v){S.vouch=S.vouch||{co:{code:'',vp:null},k:{code:'',vp:null}};if(v!==undefined)S.vouch[sc]=v||{code:'',vp:null};return S.vouch[sc]}
-function priceFor(lines,sc){const v=vch(sc);return hitungPromo(lines,promoList(),{voucher:v.code,voucherPromo:v.vp,rp,prod:k=>prod(k)||null,stock:k=>stockOf(k)})}
+function flashTerjual(p){return Math.max(+p.terjual||0,sum(valid(),o=>sum((o.diskon||[]).filter(d=>d.id===p.id&&d.tipe==='flash'),d=>+d.qty||0)))}
+function flashSisa(p){return +p.kuota>0?Math.max(0,+p.kuota-flashTerjual(p)):Infinity}
+// Flash sale yang sedang berjalan untuk produk ini dan kuotanya masih ada
+function flashOf(pr){return actPromos().filter(q=>q.tipe==='flash'&&q.kode===pr.kode&&+q.harga<(+pr.jual||0)&&flashSisa(q)>0).sort((a,b)=>a.harga-b.harga)[0]||null}
+function priceFor(lines,sc){const v=vch(sc);return hitungPromo(lines,promoList(),{voucher:v.code,voucherPromo:v.vp,rp,prod:k=>prod(k)||null,stock:k=>stockOf(k),flashUsed:flashTerjual})}
 const potTxt=p=>p.jenis==='persen'?(+p.nilai)+'%'+(+p.maks?' (maks '+rp(p.maks)+')':''):rp(p.nilai);
 const bundleText=q=>q.mode==='gratis'?'Beli '+q.qty+' gratis '+q.gratis:q.qty+' pcs '+rp(q.harga);
 function promoDesc(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode;
   if(p.tipe==='produk')return nm+' jadi '+rp(p.harga)+(pr.jual?' (dari '+rp(pr.jual)+')':'');
+  if(p.tipe==='flash')return 'Flash sale '+nm+' '+rp(p.harga)+(pr.jual?' (dari '+rp(pr.jual)+')':'')+(+p.kuota?', kuota '+p.kuota:'')+(+p.batas?', maks '+p.batas+'/pesanan':'');
   if(p.tipe==='bundling')return nm+': '+bundleText(p);
   if(p.tipe==='bonus'){const y=prod(p.bonusKode)||{};return 'Beli '+p.qty+' '+nm+' gratis '+p.bonusQty+' '+(y.name||p.bonusKode)+(p.kelipatan===false?'':' (berlaku kelipatan)')}
   if(p.tipe==='minimal')return 'Belanja min '+rp(p.minBelanja)+', hemat '+potTxt(p);
   return 'Kode '+p.voucher+': hemat '+potTxt(p)+(+p.minBelanja?', min '+rp(p.minBelanja):'')+(+p.kuota?', kuota '+p.kuota:'')}
 const actPromos=()=>{const now=new Date();return promoList().filter(p=>promoAktif(p,now))};
-function promoPrice(p){const x=actPromos().filter(q=>q.tipe==='produk'&&q.kode===p.kode&&+q.harga<(+p.jual||0));return x.length?Math.min(...x.map(q=>+q.harga)):null}
+function promoPrice(p){const x=actPromos().filter(q=>q.tipe==='produk'&&q.kode===p.kode&&+q.harga<(+p.jual||0)).map(q=>+q.harga),fl=flashOf(p);if(fl)x.push(+fl.harga);return x.length?Math.min(...x):null}
 function priceTag(p){const pp=promoPrice(p);return pp==null?'<span class="pr num">'+rp(p.jual)+'</span>':'<span class="pr num">'+rp(pp)+' <s>'+rp(p.jual)+'</s></span>'}
 function promoBadge(p){const pp=promoPrice(p),b=actPromos().find(q=>q.tipe==='bundling'&&q.kode===p.kode);
+  if(flashOf(p))return '<span class="pbadge flash">⚡ Flash -'+Math.max(1,Math.round((1-pp/p.jual)*100))+'%</span>';
   if(pp!=null&&+p.jual)return '<span class="pbadge">-'+Math.max(1,Math.round((1-pp/p.jual)*100))+'%</span>';
   if(b)return '<span class="pbadge">'+esc(bundleText(b))+'</span>';
   const bo=actPromos().find(q=>q.tipe==='bonus'&&q.kode===p.kode);return bo?'<span class="pbadge">Bonus '+esc((prod(bo.bonusKode)||{}).name||bo.bonusKode)+'</span>':''}
-function promoStrip(){const a=actPromos().filter(p=>p.tipe!=='voucher');if(!a.length)return '';
+function promoStrip(){const a=actPromos().filter(p=>p.tipe!=='voucher'&&p.tipe!=='flash');if(!a.length)return '';
   return '<div class="pstrip" aria-label="Promo">'+a.map(p=>'<span class="pchip">'+ic('money',14)+'<span>'+esc(promoDesc(p))+'</span></span>').join('')+'</div>'}
 function sumRows(hp){return '<div class="li" style="border:0;padding:2px 0"><span style="color:var(--muted)">Subtotal</span><span class="num">'+rp(hp.subtotal)+'</span></div>'+
   hp.diskon.map(d=>'<div class="li" style="border:0;padding:2px 0;color:var(--ok)"><span>'+esc(d.nama)+'</span><span class="num">−'+rp(d.nilai)+'</span></div>').join('')+
@@ -451,7 +472,7 @@ function vToko(){
   const shown=list.filter(p=>(S.cat==='Semua'||p.cat===S.cat)&&(!q||String(p.name).toLowerCase().includes(q)));
   return head+'<div class="stack" style="gap:14px">'+installBanner()+
   '<div class="search">'+ic('search',18)+'<label for="q" class="sr">Cari produk</label><input class="in" id="q" type="search" data-bind="q" data-live="1" placeholder="Cari Pop Mie, kopi…" value="'+esc(S.q)+'"></div>'+
-  bannerHtml('<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</p></div>'+cupHtml()+'</section>')+
+  flashSection()+bannerHtml('<section class="promo"><div style="flex:1;min-width:0"><span class="chip" style="font-size:11px;padding:4px 10px"><i></i>Ambil saat istirahat</span><h2>Pesan dulu, tinggal ambil.</h2><p>Order tutup '+(+M().toko.tutup||0)+' menit sebelum jam ambil.</p></div>'+cupHtml()+'</section>')+
   '<div class="chips" id="katalog" role="group" aria-label="Kategori">'+cats.map(c=>'<button class="sg'+(S.cat===c?' on':'')+'" data-cat="'+esc(c)+'" aria-pressed="'+(S.cat===c)+'">'+esc(c)+'</button>').join('')+'</div>'+
   (shown.length?'<div class="mgrid">'+shown.map(p=>{const st=stockOf(p.kode),qq=S.cart[p.kode]||0,c=catInfo(p.cat).warna;
     return '<article class="mc'+(st>0?'':' habis')+'"><div class="ph b-'+c+'">'+promoBadge(p)+(p.img?'<img src="'+esc(p.img)+'" alt="'+esc(p.name)+'">':prodTile(p,true))+(st>0?'':'<span class="stamp" aria-hidden="true">HABIS</span>')+'</div><div class="nm">'+esc(p.name)+'</div><div class="st">'+(st>0?'Sisa '+st+' '+esc(p.unit||''):'Stok habis')+'</div><div class="qty">'+priceTag(p)+stepper(p.kode,qq,st,p.name)+'</div></article>'}).join('')+'</div>'
@@ -516,7 +537,7 @@ function promoUsage(p){
   if(p.tipe==='produk'){const hit=i=>i.kode===p.kode&&+i.normal>+i.price&&(!i.promoId||i.promoId===p.id);const os=valid().filter(o=>(o.items||[]).some(hit));return{n:os.length,total:sum(os,o=>sum((o.items||[]).filter(hit),i=>(+i.normal-+i.price)*(+i.qty||0)))}}
   if(p.tipe==='bonus'){const hit=i=>i.bonus&&i.promoId===p.id;const os=valid().filter(o=>(o.items||[]).some(hit));return{n:os.length,total:sum(os,o=>sum((o.items||[]).filter(hit),i=>(+i.normal||0)*(+i.qty||0)))}}
   const os=valid().filter(o=>(o.diskon||[]).some(d=>d.id===p.id));return{n:os.length,total:sum(os,o=>sum((o.diskon||[]).filter(d=>d.id===p.id),d=>+d.nilai||0))}}
-function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,banner:(tipe||'produk')!=='voucher',bonusKode:(sortedProducts()[1]||sortedProducts()[0]||{}).kode||'',bonusQty:1,kelipatan:true,mulai:'',selesai:'',kode:k,harga:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
+function newPromo(tipe){const k=(sortedProducts()[0]||{}).kode||'';return{_edit:false,id:uid('pr'),tipe:tipe||'produk',nama:'',aktif:true,banner:(tipe||'produk')!=='voucher',bonusKode:(sortedProducts()[1]||sortedProducts()[0]||{}).kode||'',bonusQty:1,kelipatan:true,mulai:'',selesai:'',kode:k,harga:'',batas:'',mode:'harga',qty:3,gratis:1,jenis:'nominal',nilai:'',maks:'',minBelanja:'',kuota:'',voucher:''}}
 function vPromo(){
   if(loading())return '<div class="card empty">Memuat promo…</div>';
   const f=S.prf,list=(S.promos||[]).slice().sort((a,b)=>{const o={Aktif:0,Terjadwal:1,Nonaktif:2,Berakhir:3};return o[promoStatus(a)[0]]-o[promoStatus(b)[0]]||String(a.nama).localeCompare(String(b.nama))});
@@ -527,6 +548,8 @@ function vPromo(){
   let form='';
   if(f){const pr=prod(f.kode)||{};let body='';
     if(f.tipe==='produk')body=sel('kode','Produk',prodOpts,true)+inp('harga','Harga promo (normal '+rp(pr.jual||0)+')','number',' required');
+    else if(f.tipe==='flash')body=sel('kode','Produk',prodOpts,true)+inp('harga','Harga flash sale (normal '+rp(pr.jual||0)+')','number',' required')+inp('kuota','Kuota unit (0 = tanpa batas)','number')+inp('batas','Maks per pesanan (0 = tanpa batas)','number')+
+      (pr.kode?'<small style="color:var(--muted);grid-column:1/-1">Stok sekarang '+stockOf(pr.kode)+' '+esc(pr.unit||'')+(+f.harga&&+pr.jual>+f.harga?' · hemat '+rp(pr.jual-f.harga)+' ('+Math.round((1-f.harga/pr.jual)*100)+'%)':'')+(+pr.modal&&+f.harga&&+f.harga<+pr.modal?' · <b style="color:var(--bad)">di bawah modal '+rp(pr.modal)+'</b>':'')+'</small>':'');
     else if(f.tipe==='bundling')body=sel('kode','Produk',prodOpts,true)+sel('mode','Bentuk',[['harga','Beli X harga khusus'],['gratis','Beli X gratis Y']],true)+inp('qty','Beli (X)','number',' required')+
       (f.mode==='gratis'?inp('gratis','Gratis (Y)','number',' required'):inp('harga','Harga untuk X item (normal '+rp((pr.jual||0)*(+f.qty||0))+')','number',' required'));
     else if(f.tipe==='bonus'){const y=prod(f.bonusKode)||{};body=sel('kode','Produk yang dibeli (X)',prodOpts,true)+inp('qty','Jumlah beli minimal','number',' required')+sel('bonusKode','Produk bonus (Y)',prodOpts,true)+inp('bonusQty','Jumlah bonus','number',' required')+
@@ -536,17 +559,18 @@ function vPromo(){
     else body=inp('voucher','Kode voucher','text',' required maxlength="20" style="text-transform:uppercase"')+jenis()+inp('minBelanja','Minimal belanja (Rp, opsional)','number')+inp('kuota','Kuota pemakaian (0 = tanpa batas)','number');
     form='<form id="prForm" class="card stack" style="gap:12px"><div class="ch" style="margin:0"><div><h3>'+(f._edit?'Ubah promo':'Promo baru')+'</h3><p>'+esc(PTIPE[f.tipe])+'</p></div><button type="button" class="btn3" data-act="prclose">Tutup</button></div>'+
       '<div class="fg">'+(f._edit?'':sel('tipe','Jenis promo',Object.entries(PTIPE),true))+inp('nama','Nama promo','text',' required maxlength="60" placeholder="Contoh: Promo gajian"')+body+
-      '<label class="f">Mulai (opsional)<input class="in" type="datetime-local" id="pr-mulai" data-bind="prf.mulai" value="'+esc(f.mulai)+'"></label><label class="f">Selesai (opsional)<input class="in" type="datetime-local" id="pr-selesai" data-bind="prf.selesai" value="'+esc(f.selesai)+'"></label>'+
+      '<label class="f">Mulai'+(f.tipe==='flash'?'':' (opsional)')+'<input class="in" type="datetime-local" id="pr-mulai" data-bind="prf.mulai" value="'+esc(f.mulai)+'"'+(f.tipe==='flash'?' required':'')+'></label><label class="f">Selesai'+(f.tipe==='flash'?'':' (opsional)')+'<input class="in" type="datetime-local" id="pr-selesai" data-bind="prf.selesai" value="'+esc(f.selesai)+'"'+(f.tipe==='flash'?' required':'')+'></label>'+
+      (f.tipe==='flash'?'<div class="f" style="grid-column:1/-1"><span>Waktu cepat</span><div style="display:flex;gap:6px;flex-wrap:wrap">'+[['now1','Mulai sekarang, 1 jam'],['now2','Mulai sekarang, 2 jam'],['istirahat','Hari ini 12.00–13.00'],['malam','Hari ini 19.00–21.00']].map(([k,t])=>'<button type="button" class="btn3 sm" data-flashq="'+k+'">'+t+'</button>').join('')+'</div></div>':'')+
       '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-aktif" data-bind="prf.aktif"'+(f.aktif!==false?' checked':'')+'> Aktif</label>'+
-      '<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-banner" data-bind="prf.banner"'+(f.banner?' checked':'')+'> Tampilkan di banner aplikasi'+(f.tipe==='voucher'?' (kode jadi publik)':'')+'</label></div>'+
-      '<small style="color:var(--muted)">'+({produk:'Harga produk turun selama promo, tampil dengan harga coret di toko dan kasir.',bundling:'Contoh: beli 3 jadi Rp15.000, atau beli 5 gratis 1 (setiap 6 item, 1 gratis).',bonus:'Contoh: beli 2 Pop Mie gratis 1 kopi. Bonus otomatis masuk pesanan dengan harga Rp0 dan mengurangi stok. Jika stok bonus habis, bonus dilewati.',minimal:'Otomatis dipotong saat total belanja mencapai minimal. Jika ada beberapa, dipakai yang paling hemat.',voucher:'Pembeli mengetik kode di keranjang. Kasir juga bisa memakai kode. Pesanan batal tidak mengurangi kuota.'})[f.tipe]+'</small>'+
+      (f.tipe==='flash'?'':'<label class="f" style="flex-direction:row;align-items:center;gap:8px;align-self:end;height:44px"><input type="checkbox" id="pr-banner" data-bind="prf.banner"'+(f.banner?' checked':'')+'> Tampilkan di banner aplikasi'+(f.tipe==='voucher'?' (kode jadi publik)':'')+'</label>')+'</div>'+
+      '<small style="color:var(--muted)">'+({produk:'Harga produk turun selama promo, tampil dengan harga coret di toko dan kasir.',flash:'Harga khusus dalam waktu singkat, tampil di bagian ⚡ Flash Sale di toko lengkap dengan hitung mundur dan sisa kuota. Jika kuota habis atau melewati batas per pesanan, sisanya dihitung harga normal. Berlaku juga di kasir. Pesanan batal mengembalikan kuota.',bundling:'Contoh: beli 3 jadi Rp15.000, atau beli 5 gratis 1 (setiap 6 item, 1 gratis).',bonus:'Contoh: beli 2 Pop Mie gratis 1 kopi. Bonus otomatis masuk pesanan dengan harga Rp0 dan mengurangi stok. Jika stok bonus habis, bonus dilewati.',minimal:'Otomatis dipotong saat total belanja mencapai minimal. Jika ada beberapa, dipakai yang paling hemat.',voucher:'Pembeli mengetik kode di keranjang. Kasir juga bisa memakai kode. Pesanan batal tidak mengurangi kuota.'})[f.tipe]+'</small>'+
       '<div style="display:flex;gap:8px"><button class="btn" type="submit"'+(S.busy?' disabled':'')+'>'+(S.busy?'Menyimpan…':'Simpan promo')+'</button></div></form>'}
   const live=list.filter(p=>promoAktif(p,new Date()));
   return '<div class="stack">'+(form||'<div style="display:flex;gap:8px;flex-wrap:wrap">'+Object.entries(PTIPE).map(([t,l])=>'<button class="'+(t==='produk'?'btn':'btn2')+'" data-prnew="'+t+'">'+ic('plus',16,2.4)+l+'</button>').join('')+'</div>')+
    (!form&&live.length>1?'<div class="banner b-lav" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>Poster semua promo aktif</b><br><small style="color:var(--muted)">'+live.length+' promo dalam satu poster untuk Status WA atau grup.</small></span><button class="btn" data-prposterall="1">Buat poster</button></div>':'')+
    (list.length?'<div class="card" style="padding:4px 16px">'+list.map(p=>{const[st,cl]=promoStatus(p),u=promoUsage(p),cf=S.prdel===p.id;
      return '<div class="prow"><div class="stack" style="gap:4px;min-width:0;flex:1"><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b>'+esc(p.nama)+'</b><span class="mtag">'+esc(PTIPE[p.tipe]||p.tipe)+'</span><span class="pill-s '+cl+'">'+st+'</span></span>'+
-       '<small>'+esc(promoDesc(p))+'</small><small style="color:var(--muted)">'+(p.mulai||p.selesai?(p.mulai?dLabel(p.mulai):'Sekarang')+' – '+(p.selesai?dLabel(p.selesai):'tanpa batas'):'Tanpa batas waktu')+' · dipakai '+u.n+'× · total potongan '+rp(u.total)+(p.tipe==='voucher'&&+p.kuota?' · sisa kuota '+Math.max(0,p.kuota-u.n):'')+'</small></div>'+
+       '<small>'+esc(promoDesc(p))+'</small><small style="color:var(--muted)">'+(p.mulai||p.selesai?(p.mulai?dLabel(p.mulai):'Sekarang')+' – '+(p.selesai?dLabel(p.selesai):'tanpa batas'):'Tanpa batas waktu')+' · dipakai '+u.n+'× · total potongan '+rp(u.total)+(p.tipe==='voucher'&&+p.kuota?' · sisa kuota '+Math.max(0,p.kuota-u.n):'')+(p.tipe==='flash'?' · terjual '+flashTerjual(p)+(+p.kuota?'/'+p.kuota:'')+' unit':'')+'</small></div>'+
        '<div class="prow-act"><button class="btn3" data-prposter="'+esc(p.id)+'">Poster</button><button class="btn3" data-predit="'+esc(p.id)+'">Ubah</button><button class="btn3" data-prtoggle="'+esc(p.id)+'">'+(p.aktif===false?'Aktifkan':'Matikan')+'</button>'+(cf?'<button class="btn3 dang" data-prdelok="'+esc(p.id)+'">Ya, hapus</button>':'<button class="btn3 dang" data-prdel="'+esc(p.id)+'">Hapus</button>')+'</div></div>'}).join('')+'</div>'
     :'<div class="card empty">Belum ada promo. Pilih jenis promo di atas untuk membuat.</div>')+'</div>';
 }
@@ -555,9 +579,10 @@ function promoBody(f){
   if(!b.nama)throw new Error('Nama promo wajib diisi.');
   if(b.mulai&&b.selesai&&b.selesai<b.mulai)throw new Error('Tanggal selesai harus setelah tanggal mulai.');
   const disk=()=>{b.jenis=f.jenis==='persen'?'persen':'nominal';b.nilai=Math.min(n(f.nilai),b.jenis==='persen'?100:1e7);if(!b.nilai)throw new Error('Isi besar potongan.');b.maks=b.jenis==='persen'?n(f.maks):0;b.minBelanja=n(f.minBelanja)};
-  if(f.tipe==='produk'||f.tipe==='bundling'||f.tipe==='bonus'){if(!prod(f.kode))throw new Error('Pilih produk.');b.kode=f.kode}
+  if(f.tipe==='produk'||f.tipe==='flash'||f.tipe==='bundling'||f.tipe==='bonus'){if(!prod(f.kode))throw new Error('Pilih produk.');b.kode=f.kode}
   if(f.tipe==='bonus'){if(!prod(f.bonusKode))throw new Error('Pilih produk bonus.');b.bonusKode=f.bonusKode;b.qty=Math.max(1,n(f.qty));b.bonusQty=Math.max(1,n(f.bonusQty));b.kelipatan=f.kelipatan!==false}
   if(f.tipe==='produk'){b.harga=n(f.harga);if(b.harga>=(+prod(f.kode).jual||0))throw new Error('Harga promo harus lebih murah dari harga normal.')}
+  else if(f.tipe==='flash'){b.harga=n(f.harga);if(b.harga>=(+prod(f.kode).jual||0))throw new Error('Harga flash sale harus lebih murah dari harga normal.');if(!b.mulai||!b.selesai)throw new Error('Isi waktu mulai dan selesai flash sale.');if(new Date(b.selesai)<=new Date())throw new Error('Waktu selesai sudah lewat.');b.kuota=Math.min(n(f.kuota),100000);b.batas=Math.min(n(f.batas),100)}
   else if(f.tipe==='bundling'){b.mode=f.mode==='gratis'?'gratis':'harga';b.qty=Math.max(1,n(f.qty));if(b.mode==='gratis'){b.gratis=Math.max(1,n(f.gratis));b.harga=0}else{b.harga=n(f.harga);b.gratis=0;if(b.qty<2)throw new Error('Harga khusus minimal untuk 2 item.')}}
   else if(f.tipe==='bonus'){/* sudah diisi di atas */}
   else if(f.tipe==='minimal'){disk();if(!b.minBelanja)throw new Error('Isi minimal belanja.')}
@@ -582,6 +607,7 @@ document.addEventListener('input',e=>{const t=e.target;if(!t||!t.dataset||!t.dat
 /* ---------- Banner promo (toko) & poster (admin) ---------- */
 const SITE=()=>window.KAMART_SITE||'https://kamart-liart.vercel.app';
 function promoHead(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode||'';
+  if(p.tipe==='flash')return{k:'⚡ FLASH SALE',t:nm,big:rp(p.harga),s:pr.jual?rp(pr.jual):'',strike:true,img:pr.img||'',cat:pr.cat,prod:true,save:(pr.jual?'Hemat '+rp(pr.jual-p.harga)+' per '+(pr.unit||'item'):'')+(+p.kuota?' · hanya '+p.kuota+' '+(pr.unit||'item'):'')};
   if(p.tipe==='produk')return{k:'HARGA SPESIAL',t:nm,big:rp(p.harga),s:pr.jual?rp(pr.jual):'',strike:true,img:pr.img||'',cat:pr.cat,prod:true,save:pr.jual?'Hemat '+rp(pr.jual-p.harga)+' per '+(pr.unit||'item'):''};
   if(p.tipe==='bundling')return{k:'PAKET HEMAT',t:nm,big:p.mode==='gratis'?'Beli '+p.qty+' gratis '+p.gratis:p.qty+' pcs '+rp(p.harga),s:p.mode==='gratis'?'':(pr.jual?rp(pr.jual*p.qty):''),strike:p.mode!=='gratis',img:pr.img||'',cat:pr.cat,prod:true,
     save:pr.jual?(p.mode==='gratis'?'Hemat '+rp(pr.jual*p.gratis)+' tiap '+(+p.qty+ +p.gratis)+' item':'Hemat '+rp(pr.jual*p.qty-p.harga)):''};
@@ -591,7 +617,7 @@ function promoHead(p){const pr=prod(p.kode)||{},nm=pr.name||p.kode||'';
 function promoPeriod(p){const f=d=>new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short'}),now=new Date();
   if(p.mulai&&new Date(p.mulai)>now)return 'Mulai '+f(p.mulai)+(p.selesai?' s/d '+f(p.selesai):'');
   return p.selesai?'Berlaku s/d '+f(p.selesai):'Berlaku selama persediaan ada'}
-const bannerPromos=()=>actPromos().filter(p=>p.banner!==false&&(p.tipe!=='voucher'||p.banner===true));
+const bannerPromos=()=>actPromos().filter(p=>p.banner!==false&&p.tipe!=='flash'&&(p.tipe!=='voucher'||p.banner===true));
 const BCOL=['pink','blue','gold','mint','lav'];
 function bannerHtml(hero){const a=bannerPromos();if(!a.length)return hero;
   const slides=a.map((p,i)=>{const h=promoHead(p);
@@ -1964,6 +1990,27 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-pgn]');if(
   st.p=+to;render();const bar=document.querySelector('[data-pgn^="'+k+'|"]');const box=bar&&bar.closest('.card');if(box&&box.getBoundingClientRect().top<0)box.scrollIntoView({block:'start'})});
 document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.pgs)return;const k=t.dataset.pgs,st=S.pg&&S.pg[k];if(!st)return;
   const first=(st.p-1)*st.n;st.n=+t.value;st.p=Math.floor(first/st.n)+1;try{ls.set('pgn:'+k,st.n)}catch(e){}render()});
+/* ---------- Flash sale (toko) ---------- */
+function cdText(ms){ms=Math.max(0,ms);const h=Math.floor(ms/36e5),m=Math.floor(ms%36e5/6e4),d=Math.floor(ms%6e4/1e3),z=n=>String(n).padStart(2,'0');return (h>=24?Math.floor(h/24)+' hari ':'')+z(h%24)+':'+z(m)+':'+z(d)}
+function flashSection(){const now=new Date(),all=promoList().filter(p=>p.tipe==='flash'&&p.aktif!==false&&p.selesai&&new Date(p.selesai)>now);
+  const prodOk=p=>{const pr=prod(p.kode);return pr&&pr.online!==false&&catOnline(pr.cat)};
+  const live=all.filter(p=>promoAktif(p,now)&&prodOk(p)),soon=all.filter(p=>p.mulai&&new Date(p.mulai)>now&&new Date(p.mulai)-now<24*36e5&&prodOk(p));
+  if(!live.length&&!soon.length)return '';
+  const end=live.length?Math.min(...live.map(p=>+new Date(p.selesai))):0,start=soon.length?Math.min(...soon.map(p=>+new Date(p.mulai))):0;
+  const card=(p,on)=>{const pr=prod(p.kode),st=stockOf(pr.kode),sisa=flashSisa(p),habis=on&&(sisa<=0||st<=0),qq=S.cart[pr.kode]||0,pct=+p.kuota?Math.min(100,Math.round(flashTerjual(p)/p.kuota*100)):0;
+    return '<article class="fcard'+(habis?' habis':'')+'"><div class="fph b-'+catInfo(pr.cat).warna+'">'+(pr.img?'<img src="'+esc(pr.img)+'" alt="'+esc(pr.name)+'">':prodTile(pr,true))+(pr.jual?'<span class="fdisc">-'+Math.round((1-p.harga/pr.jual)*100)+'%</span>':'')+'</div>'+
+     '<b class="fnm">'+esc(pr.name)+'</b><span class="fpr num">'+rp(p.harga)+' <s>'+rp(pr.jual)+'</s></span>'+
+     (on?(+p.kuota?'<span class="fbar" role="img" aria-label="Terjual '+flashTerjual(p)+' dari '+p.kuota+'"><i style="width:'+Math.max(6,pct)+'%"></i><em>'+(sisa<=0?'Habis':pct>=70?'Sisa '+sisa+'!':'Terjual '+flashTerjual(p))+'</em></span>':'')+(+p.batas?'<small class="fnote">Maks '+p.batas+' per pesanan</small>':'')+
+       '<div class="fact">'+(habis?'<span class="pill-s ps-bad">'+(st<=0?'Stok habis':'Kuota habis')+'</span>':stepper(pr.kode,qq,st,pr.name))+'</div>'
+      :'<small class="fnote">Mulai '+new Date(p.mulai).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+'</small>')+'</article>'};
+  return '<section class="flashsec" aria-label="Flash sale"><div class="fhead"><b>⚡ Flash Sale</b>'+(live.length?'<span class="fcd">Berakhir dalam <span class="num" data-cd="'+end+'">'+cdText(end-now)+'</span></span>':'<span class="fcd">Mulai dalam <span class="num" data-cd="'+start+'">'+cdText(start-now)+'</span></span>')+'</div>'+
+   '<div class="ftrack">'+live.map(p=>card(p,true)).join('')+soon.map(p=>card(p,false)).join('')+'</div></section>'}
+// Hitung mundur berjalan tiap detik tanpa menggambar ulang halaman; saat waktunya habis, halaman digambar ulang.
+setInterval(()=>{const els=document.querySelectorAll('[data-cd]');if(!els.length||document.hidden)return;let done=false;els.forEach(el=>{const ms=+el.dataset.cd-Date.now();if(ms<=0)done=true;el.textContent=cdText(ms)});if(done)render()},1000);
+document.addEventListener('click',e=>{const t=e.target.closest('[data-flashq]');if(!t||!S.prf)return;const z=n=>String(n).padStart(2,'0'),loc=d=>d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes());
+  const now=new Date(),at=(h,m)=>{const d=new Date();d.setHours(h,m,0,0);return d},k=t.dataset.flashq;let a,b;
+  if(k==='now1'||k==='now2'){a=now;b=new Date(+now+(k==='now1'?1:2)*36e5)}else if(k==='istirahat'){a=at(12,0);b=at(13,0)}else{a=at(19,0);b=at(21,0)}
+  S.prf.mulai=loc(a);S.prf.selesai=loc(b);render()});
 /* ---------- Donut tunai vs non-tunai ---------- */
 const BAYAR_GRP=[['tunai','Tunai','#2E9E6B'],['qris','QRIS','#6E56CF'],['nanti','Bayar nanti / kasbon','#E8A33A'],['lain','Non-tunai lain','#8C8FA3']];
 function bayarGrp(o){const t=tipeOf(o);return t==='tunai'?'tunai':t==='qris'?'qris':(t==='kasbon'||t==='manual')?'nanti':'lain'}
