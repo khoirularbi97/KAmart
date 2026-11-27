@@ -736,6 +736,7 @@ function vRiwayat(){
    '<div class="rhstats"><div class="stat b-lav"><span class="lb">Pesanan</span><span class="vl num">'+list.length+'</span><span class="sm">'+(list.length-ok.length)+' dibatalkan</span></div>'+
     '<div class="stat b-blue"><span class="lb">Omzet</span><span class="vl num">'+rp(sum(ok,o=>+o.total||0))+'</span><span class="sm">tanpa yang batal</span></div>'+
     '<div class="stat b-gold"><span class="lb">Untung</span><span class="vl num">'+rp(sum(ok,profit))+'</span><span class="sm">'+rp(sum(ok.filter(o=>!o.paid),o=>+o.total||0))+' belum dibayar</span></div></div>'+
+   bayarDonut(ok,'Sesuai filter di atas · tanpa yang batal')+
    (shown.length?'<div class="card" style="padding:4px 16px">'+shown.map(o=>{const d=new Date(o.createdAt).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),st=o.stage==null?0:o.stage,open=f.open===o.id;
       const head=d!==lastDay?'<div class="rhday">'+d+'</div>':'';lastDay=d;
       return head+'<div class="rhrow'+(open?' open':'')+'"><button class="rhbtn" data-rhopen="'+o.id+'" aria-expanded="'+open+'">'+
@@ -944,7 +945,7 @@ function vDashboard(){
      (topA.length?'<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center"><div role="img" aria-label="'+esc(topA.map(x=>x[0]+' '+x[1]).join(', '))+'" style="width:124px;height:124px;border-radius:50%;background:'+cg+';display:flex;align-items:center;justify-content:center;box-shadow:0 12px 24px rgba(110,90,196,.2)"><span style="width:74px;height:74px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center"><b class="num" style="font-size:18px">'+topT+'</b><small style="font-size:10px;color:var(--muted)">terjual</small></span></div><div style="flex:1 1 130px;display:flex;flex-direction:column;gap:8px">'+topA.map((x,i)=>'<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px"><span style="display:flex;align-items:center;gap:8px"><i style="width:10px;height:10px;border-radius:3px;background:'+cols[i]+'"></i>'+esc(x[0])+'</span><b class="num">'+x[1]+'</b></div>').join('')+'</div></div>':'<div class="empty">Belum ada penjualan bulan ini.</div>')+'</div>'+
    '<div class="card"><div class="ch"><div><h3>Stok menipis</h3><p>Di bawah stok minimum</p></div><button class="btn3" data-go="stok">Catat stok</button></div>'+
      (low.length?low.map(x=>'<div class="li"><span><b>'+esc(x.p.name)+'</b><br><span style="font-size:12px;color:var(--muted)">min. '+(+x.p.min||0)+' '+esc(x.p.unit||'')+'</span></span><span class="pill-s ps-bad num">sisa '+x.s+'</span></div>').join(''):'<div class="empty">Semua stok aman.</div>')+'</div>'+
-  '</div>'+ulasanCardAdmin()+'</div>';
+  '</div><div class="grid g2" style="align-items:start">'+bayarDonut(valid().filter(o=>o.stage!==-1&&mk(o.createdAt)===mo),mLabel(mo)+' · tanpa yang batal')+ulasanCardAdmin()+'</div></div>';
 }
 
 function vPesanan(){
@@ -1938,6 +1939,23 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-pgn]');if(
   st.p=+to;render();const bar=document.querySelector('[data-pgn^="'+k+'|"]');const box=bar&&bar.closest('.card');if(box&&box.getBoundingClientRect().top<0)box.scrollIntoView({block:'start'})});
 document.addEventListener('change',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.pgs)return;const k=t.dataset.pgs,st=S.pg&&S.pg[k];if(!st)return;
   const first=(st.p-1)*st.n;st.n=+t.value;st.p=Math.floor(first/st.n)+1;try{ls.set('pgn:'+k,st.n)}catch(e){}render()});
+/* ---------- Donut tunai vs non-tunai ---------- */
+const BAYAR_GRP=[['tunai','Tunai','#2E9E6B'],['qris','QRIS','#6E56CF'],['nanti','Bayar nanti / kasbon','#E8A33A'],['lain','Non-tunai lain','#8C8FA3']];
+function bayarGrp(o){const t=tipeOf(o);return t==='tunai'?'tunai':t==='qris'?'qris':(t==='kasbon'||t==='manual')?'nanti':'lain'}
+function bayarDonut(ok,sub){
+  const g=BAYAR_GRP.map(([k,l,c])=>{const l2=ok.filter(o=>bayarGrp(o)===k);return{k,l,c,n:l2.length,v:sum(l2,o=>+o.total||0)}}).filter(x=>x.n);
+  const tot=sum(g,x=>x.v),tun=(g.find(x=>x.k==='tunai')||{v:0,n:0}),non=tot-tun.v,nonN=sum(g.filter(x=>x.k!=='tunai'),x=>x.n);
+  const head='<div class="ch"><div><h3>Tunai vs non-tunai</h3><p>'+esc(sub)+'</p></div></div>';
+  if(!tot)return '<div class="card">'+head+'<div class="empty">Belum ada transaksi lunas atau diproses di periode ini.</div></div>';
+  const R=46,C=2*Math.PI*R,gap=g.length>1?2:0;let acc=0;
+  const segs=g.map(x=>{const len=x.v/tot*C,d=Math.max(0,len-gap),o=acc;acc+=len;
+    return '<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+x.c+'" stroke-width="18" stroke-dasharray="'+d.toFixed(2)+' '+(C-d).toFixed(2)+'" stroke-dashoffset="'+(-o).toFixed(2)+'" transform="rotate(-90 60 60)"><title>'+esc(x.l)+': '+rp(x.v)+' ('+Math.round(x.v/tot*100)+'%, '+x.n+' transaksi)</title></circle>'}).join('');
+  const pct=Math.round(tun.v/tot*100);
+  return '<div class="card bayar">'+head+
+   '<div class="bdwrap"><svg viewBox="0 0 120 120" class="bdonut" role="img" aria-label="'+esc(g.map(x=>x.l+' '+rp(x.v)+' '+Math.round(x.v/tot*100)+' persen').join(', '))+'"><circle cx="60" cy="60" r="'+R+'" fill="none" stroke="#F1EAF4" stroke-width="18"/>'+segs+
+     '<text x="60" y="58" text-anchor="middle" class="bdv">'+pct+'%</text><text x="60" y="74" text-anchor="middle" class="bdl">tunai</text></svg>'+
+    '<div class="bdleg">'+g.map(x=>'<div class="bdrow"><i style="background:'+x.c+'"></i><span class="bdn">'+esc(x.l)+'<small>'+x.n+' transaksi</small></span><span class="bdx"><b class="num">'+rp(x.v)+'</b><small>'+Math.round(x.v/tot*100)+'%</small></span></div>').join('')+'</div></div>'+
+   '<div class="bdsum"><span><small>Tunai</small><b class="num">'+rp(tun.v)+'</b><small>'+tun.n+' transaksi</small></span><span><small>Non-tunai</small><b class="num">'+rp(non)+'</b><small>'+nonN+' transaksi</small></span></div></div>'}
 /* ---------- Ulasan pembeli (hanya dilihat admin) ---------- */
 const ULASAN_TAGS={baik:['Barang lengkap','Siap tepat waktu','Harga pas','Pelayanan ramah'],kurang:['Stok sering habis','Antre lama','Harga kemahalan','Pesanan kurang/salah']};
 const ULASAN_HARI=14,BINTANG_TXT=['','Kecewa','Kurang','Cukup','Puas','Puas sekali'];
