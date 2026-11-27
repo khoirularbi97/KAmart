@@ -794,7 +794,8 @@ admin.put('/cashclose/:date', ah(async (req, res) => {
   const modal = n('modal'); const tunai = n('tunai'); const kasbon = n('kasbon'); const keluar = n('keluar'); const fisik = n('fisik'); const belanja = b.belanja == null ? 0 : n('belanja');
   const seharusnya = modal + tunai + kasbon - keluar - belanja;
   const pec = {};
-  Object.keys(b.pecahan || {}).slice(0, 20).forEach((k) => { const v = int(b.pecahan[k]); if (/^\d{1,6}$/.test(k) && Number.isInteger(v) && v > 0 && v < 1e6) pec[k] = v; });
+  // Pecahan uang kertas: jumlah lembar per nominal. 'koin': total rupiah uang logam.
+  Object.keys(b.pecahan || {}).slice(0, 20).forEach((k) => { const v = int(b.pecahan[k]); if (/^\d{1,6}$/.test(k) && Number.isInteger(v) && v > 0 && v < 1e6) pec[k] = v; else if (k === 'koin' && Number.isInteger(v) && v > 0 && v < 1e9) pec.koin = v; });
   const r = await db.query(`INSERT INTO cashclose (date, modal, tunai, kasbon, keluar, ket_keluar, seharusnya, fisik, selisih, pecahan, catatan, belanja, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
      ON CONFLICT (date) DO UPDATE SET modal=$2, tunai=$3, kasbon=$4, keluar=$5, ket_keluar=$6, seharusnya=$7, fisik=$8, selisih=$9, pecahan=$10, catatan=$11, belanja=$12, updated_at=now()
